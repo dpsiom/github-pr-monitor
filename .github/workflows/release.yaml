@@ -30,7 +30,8 @@ jobs:
       - name: Package release artifact (Unix)
         if: runner.os != 'Windows'
         run: |
-          VERSION="${GITHUB_REF_NAME:-manual}"
+          RAW="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME:-pr}}"
+          VERSION="${RAW//\//-}"
           PKG_NAME="github-pr-monitor-${RUNNER_OS}-${VERSION}.tar.gz"
           tar -czf "dist/${PKG_NAME}" -C dist github-pr-monitor
           shasum -a 256 "dist/${PKG_NAME}" > "dist/SHA256SUMS-${RUNNER_OS}.txt"
@@ -38,7 +39,8 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $version = if ($env:GITHUB_REF_NAME) { $env:GITHUB_REF_NAME } else { 'manual' }
+          $raw = if ($env:GITHUB_HEAD_REF) { $env:GITHUB_HEAD_REF } elseif ($env:GITHUB_REF_NAME) { $env:GITHUB_REF_NAME } else { 'pr' }
+          $version = $raw -replace '/', '-'
           $pkgName = "github-pr-monitor-$env:RUNNER_OS-$version.zip"
           Compress-Archive -Path dist/github-pr-monitor.exe -DestinationPath "dist/$pkgName" -Force
           (Get-FileHash "dist/$pkgName" -Algorithm SHA256).Hash + "  $pkgName" | Out-File -FilePath "dist/SHA256SUMS-$env:RUNNER_OS.txt" -Encoding ascii
