@@ -116,13 +116,13 @@ Docker container
 Pre-built images are published to GitHub Container Registry on every tagged release:
 
 ```bash
-docker pull ghcr.io/<your-org>/github-pr-monitor:latest
+docker pull ghcr.io/dpsiom/github-pr-monitor:latest
 ```
 
 To use a specific release tag (e.g. v0.1.0):
 
 ```bash
-docker pull ghcr.io/<your-org>/github-pr-monitor:v0.1.0
+docker pull ghcr.io/dpsiom/github-pr-monitor:v0.1.0
 ```
 
 To build locally from source instead:
@@ -154,7 +154,7 @@ docker run --rm \
   --env-file .env \
   -v "$PWD/config.yaml:/app/config.yaml:ro" \
   -p 6080:6080 \
-  ghcr.io/<your-org>/github-pr-monitor:latest
+  ghcr.io/dpsiom/github-pr-monitor:latest
 ```
 
 Then open **http://localhost:6080/vnc.html** in Safari or Chrome.
@@ -195,7 +195,7 @@ docker run --rm \
   -v /absolute/path/to/app.pem:/run/secrets/app.pem:ro \
   -v "$PWD/config.yaml:/app/config.yaml:ro" \
   -p 6080:6080 \
-  ghcr.io/<your-org>/github-pr-monitor:latest
+  ghcr.io/dpsiom/github-pr-monitor:latest
 ```
 
 ### Troubleshooting Docker
