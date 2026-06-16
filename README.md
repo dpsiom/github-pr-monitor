@@ -81,7 +81,7 @@ services:
 
 ### 5. Open the app
 
-Open **[http://localhost:6080/vnc.html?autoconnect=true&resize=scale](http://localhost:6080/vnc.html?autoconnect=true&resize=scale)** in Safari or Chrome.
+Open **[http://localhost:6080](http://localhost:6080)** in Safari or Chrome.
 
 ---
 
@@ -106,7 +106,7 @@ Docker container
             └─ noVNC / websockify  →  port 6080
                         │
                         ▼
-              http://localhost:6080/vnc.html
+              http://localhost:6080
               (Safari / Chrome on your Mac)
 ```
 
@@ -178,7 +178,7 @@ python -m src.main
 | Blank / black browser window | Reload — the app may still be initialising |
 | Empty PR list | Check `config.yaml` repository names are `owner/repo` format and token has access |
 | `GITHUB_TOKEN` invalid | Ensure token has `repo` scope and hasn't expired |
-| Port 6080 in use | Use `-p 6081:6080` and open `http://localhost:6081/vnc.html` |
+| Port 6080 in use | Use `-p 6081:6080` and open `http://localhost:6081` |
 | Rate limit errors | Increase `monitor.poll_interval_seconds` (minimum 30) |
 
 ---

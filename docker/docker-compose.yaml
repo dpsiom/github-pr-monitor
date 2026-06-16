@@ -19,5 +19,5 @@ services:
       # Mount the PEM key only if using GitHub App auth:
       # - /absolute/path/to/app.pem:/run/secrets/app.pem:ro
     ports:
-      # Open http://localhost:6080/vnc.html in a browser to access the GUI
+      # Open http://localhost:6080 in a browser to access the GUI
       - "6080:6080"
