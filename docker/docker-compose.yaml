@@ -1,8 +1,13 @@
 services:
   app:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
+    # Published image — pulled automatically on first run
+    image: ghcr.io/dpsiom/github-pr-monitor:latest
+
+    # Uncomment the section below (and comment out 'image:' above) to build locally from source:
+    # build:
+    #   context: ..
+    #   dockerfile: docker/Dockerfile
+
     environment:
       - GITHUB_TOKEN=${GITHUB_TOKEN}
       # GitHub App auth (optional — leave blank if using a PAT)
@@ -10,9 +15,9 @@ services:
       - GITHUB_APP_INSTALLATION_ID=${GITHUB_APP_INSTALLATION_ID:-}
       - GITHUB_APP_PRIVATE_KEY_PATH=${GITHUB_APP_PRIVATE_KEY_PATH:-}
     volumes:
-      - ../config.yaml:/app/config.yaml:ro
-      # Mount the PEM key only if using GitHub App auth
+      - ./config.yaml:/app/config.yaml:ro
+      # Mount the PEM key only if using GitHub App auth:
       # - /absolute/path/to/app.pem:/run/secrets/app.pem:ro
     ports:
-      # noVNC browser interface — open http://localhost:6080/vnc.html
+      # Open http://localhost:6080/vnc.html in a browser to access the GUI
       - "6080:6080"
