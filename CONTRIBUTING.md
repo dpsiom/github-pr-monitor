@@ -1,24 +1,92 @@
 # Contributing
 
-## Development Setup
+## Development setup
 
 1. Install Python 3.11+.
-2. Create virtual environment.
-3. Install dependencies with dev extras.
-4. Enable repository hooks to block direct commit/push to main:
+2. Create and activate a virtual environment.
+3. Install all dependencies including dev tools:
+
+```bash
+pip install -e .[dev]
+```
+
+4. Copy example config files:
+
+```bash
+cp config.example.yaml config.yaml
+cp .env.example .env
+```
+
+5. Enable repository hooks to block direct commit/push to main:
 
 ```bash
 git config core.hooksPath .githooks
 ```
 
-## Quality Bar
+## Quality gates
 
-- Keep type hints for all functions.
-- Add tests for new logic.
-- Run lint, mypy, pytest, and bandit before creating PR.
+Run all checks before creating a PR:
 
-## Branch and PR
+```bash
+ruff check src tests            # lint
+mypy src --strict               # type checking
+pytest --cov=src --cov-report=term-missing   # tests + coverage
+bandit -r src                   # security scan
+```
 
-- Use focused branches per feature or fix.
-- Include screenshots for UI changes.
-- Describe security implications for auth/API changes.
+All four must pass. Current coverage target: **96%+**.
+
+## Branch and PR workflow
+
+1. Create a feature branch — never commit directly to `main`:
+
+```bash
+git checkout -b feat/my-change
+```
+
+2. Push and open a PR:
+
+```bash
+git push -u origin feat/my-change
+gh pr create --base main
+```
+
+3. CI must pass before merging.
+
+## Code standards
+
+- Type hints required on all public functions.
+- Tests required for all new logic.
+- Note security implications in PR description for auth/API changes.
+- Include screenshots in PR description for UI changes.
+
+## CI workflows
+
+| Workflow | Trigger | Purpose |
+|---|---|---|
+| `ci.yaml` | PR to main | Lint, type check, tests, security scan |
+| `build.yaml` | PR to main | Cross-platform PyInstaller build (macOS, Linux, Windows) |
+| `release.yaml` | PR to main | Release build artifact smoke-test |
+| `docker.yaml` | PR + push to main | Build Docker image; push to GHCR on merge |
+| `publish.yaml` | Manual (`workflow_dispatch`) | Tag a version and publish GitHub Release |
+
+## Publishing a release
+
+Run the **Publish Release** workflow manually from the GitHub Actions tab.
+Enter the version (with or without `v` prefix, e.g. `1.2.0` or `v1.2.0`).
+The workflow will:
+- Create and push the git tag
+- Build cross-platform binaries
+- Create a GitHub Release with checksums
+
+## Dependency updates
+
+Dependabot is configured (`.github/dependabot.yml`) to open weekly PRs for:
+- pip package updates
+- GitHub Actions version updates
+
+## Verifying a release asset checksum
+
+```bash
+shasum -a 256 -c SHA256SUMS-Linux.txt
+```

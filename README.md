@@ -1,153 +1,91 @@
 # GitHub PR Monitor
 
-GitHub PR Monitor is a Python desktop GUI application for tracking pull requests across repositories and performing review actions from one place.
+A desktop GUI for monitoring and actioning GitHub pull requests across multiple repositories — approve, review, comment, merge, and close without leaving the app.
 
-## Features (MVP)
+The GUI runs in a browser tab via Docker — **no XQuartz, no X11, nothing extra to install on macOS**.
 
-- Secure token loading from environment variable, keychain, and first-run prompt
-- Repository list driven by YAML configuration
-- In-app settings editor to add/remove/edit repositories and monitor/auth mode
-- Async polling monitor with observer updates into UI
-- PR list and detail panes with metadata and CI state
-- Actions: approve, request changes, comment, merge, close, and line-level comments
-- Rate-limit retry helper with exponential backoff
-- Realtime mode with local webhook listener and polling fallback
+---
 
-## Quick Start
+## Quickest start — Docker Compose
 
-1. Create and activate a Python 3.11+ environment.
-2. Install dependencies:
+### 1. Prerequisites
+
+- [Docker Desktop for Mac](https://www.docker.com/products/docker-desktop/)
+- A GitHub Personal Access Token with **`repo`** scope ([create one here](https://github.com/settings/tokens/new?scopes=repo&description=github-pr-monitor))
+
+### 2. Create your `.env` file
 
 ```bash
-pip install -e .[dev]
+cp .env.example .env
 ```
 
-3. Create local configuration files:
+Edit `.env` — only `GITHUB_TOKEN` is required for PAT auth:
+
+```dotenv
+GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxx
+
+# Only needed when using GitHub App auth instead of a PAT:
+GITHUB_APP_ID=
+GITHUB_APP_INSTALLATION_ID=
+GITHUB_APP_PRIVATE_KEY_PATH=
+```
+
+### 3. Create your `config.yaml`
 
 ```bash
 cp config.example.yaml config.yaml
-cp .env.example .env
 ```
 
-4. Set token in .env or your shell:
+Edit `config.yaml` to list your repositories:
 
-```bash
-GITHUB_TOKEN=ghp_xxx
+```yaml
+repositories:
+  - name: your-org/your-repo       # owner/repo format
+    enabled: true
+  - name: your-org/another-repo
+    enabled: true
+
+monitor:
+  poll_interval_seconds: 60        # minimum 30
+  realtime_mode: polling           # or: webhook
+
+auth_mode: pat                     # or: github_app
 ```
 
-5. Run app:
-
-```bash
-python -m src.main
-```
-
-## Authentication Setup
-
-Preferred order:
-
-1. Environment variable GITHUB_TOKEN
-2. Keychain token (stored with keyring)
-3. First-run prompt in app (stored to keychain)
-
-Token must include at least repo scope.
-
-### GitHub App Alternative
-
-You can authenticate via GitHub App installation token.
-
-In config.yaml:
-
-auth_mode: github_app
-
-github_app:
-	enabled: true
-	app_id: "12345"
-	installation_id: "67890"
-	private_key_path: "/absolute/path/to/private-key.pem"
-
-## Configuration
-
-Use config.yaml (gitignored) based on config.example.yaml.
-
-repositories: list of owner/repo values.
-
-monitor.poll_interval_seconds must be >= 30.
-
-monitor.realtime_mode supports polling and webhook.
-
-For webhook mode with smee.io:
-
-1. Set monitor.realtime_mode: webhook.
-2. Start relay (outside app):
-
-```bash
-npx smee-client --url https://smee.io/YOUR_CHANNEL --target http://127.0.0.1:8765/webhook
-```
-
-3. Add the smee URL in config for operator reference.
-
-The app still runs polling fallback at your configured interval.
-
-## Running in Docker on macOS
-
-### How the GUI works inside Docker
-
-GitHub PR Monitor is a native desktop application (tkinter). Inside the container a
-**virtual framebuffer** (Xvfb) and a **VNC-to-browser bridge** (noVNC) are started
-automatically. You access the GUI through any browser already on your Mac — **no
-XQuartz, no X11, nothing extra to install**.
-
-```
-Docker container
-  └─ Xvfb (virtual display :0)
-       └─ x11vnc (VNC server, localhost only)
-            └─ noVNC / websockify (HTTP WebSocket proxy on port 6080)
-                   │
-                   ▼  http://localhost:6080/vnc.html
-              Safari / Chrome on your Mac  →  GUI window
-```
-
-### Prerequisites
-
-- [Docker Desktop for Mac](https://www.docker.com/products/docker-desktop/) — nothing else.
-
-### Downloading the image
-
-Pre-built images are published to GitHub Container Registry on every tagged release:
+### 4. Pull and run
 
 ```bash
 docker pull ghcr.io/dpsiom/github-pr-monitor:latest
+
+docker compose -f docker/docker-compose.yaml up
 ```
 
-To use a specific release tag (e.g. v0.1.0):
+The full `docker/docker-compose.yaml` for reference:
 
-```bash
-docker pull ghcr.io/dpsiom/github-pr-monitor:v0.1.0
+```yaml
+services:
+  app:
+    image: ghcr.io/dpsiom/github-pr-monitor:latest
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - GITHUB_APP_ID=${GITHUB_APP_ID:-}
+      - GITHUB_APP_INSTALLATION_ID=${GITHUB_APP_INSTALLATION_ID:-}
+      - GITHUB_APP_PRIVATE_KEY_PATH=${GITHUB_APP_PRIVATE_KEY_PATH:-}
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      # Uncomment if using GitHub App auth:
+      # - /absolute/path/to/app.pem:/run/secrets/app.pem:ro
+    ports:
+      - "6080:6080"
 ```
 
-To build locally from source instead:
+### 5. Open the app
 
-```bash
-docker build -f docker/Dockerfile -t github-pr-monitor .
-```
+Open **[http://localhost:6080/vnc.html?autoconnect=true&resize=scale](http://localhost:6080/vnc.html?autoconnect=true&resize=scale)** in Safari or Chrome.
 
-### Environment variables
+---
 
-| Variable | Required | Description |
-|---|---|---|
-| `GITHUB_TOKEN` | Yes (PAT mode) | Personal Access Token with `repo` scope |
-| `GITHUB_APP_ID` | GitHub App mode | Application ID from your GitHub App |
-| `GITHUB_APP_INSTALLATION_ID` | GitHub App mode | Installation ID for the target org/user |
-| `GITHUB_APP_PRIVATE_KEY_PATH` | GitHub App mode | Path **inside the container** to the PEM key file |
-
-Copy `.env.example` to `.env` and fill in the values:
-
-```bash
-cp .env.example .env
-# Set GITHUB_TOKEN=ghp_xxx  (and GitHub App fields if using App auth)
-```
-
-### Running with `docker run`
+## Alternative: `docker run`
 
 ```bash
 docker run --rm \
@@ -157,35 +95,53 @@ docker run --rm \
   ghcr.io/dpsiom/github-pr-monitor:latest
 ```
 
-Then open **http://localhost:6080/vnc.html** in Safari or Chrome.
+---
 
-For an auto-connecting scaled view append query parameters:
+## How the GUI works in Docker
 
 ```
-http://localhost:6080/vnc.html?autoconnect=true&resize=scale
+Docker container
+  └─ Xvfb (virtual framebuffer)
+       └─ x11vnc (VNC server, localhost only)
+            └─ noVNC / websockify  →  port 6080
+                        │
+                        ▼
+              http://localhost:6080/vnc.html
+              (Safari / Chrome on your Mac)
 ```
 
-### Running with Docker Compose
+---
 
-```bash
-GITHUB_TOKEN=ghp_xxx docker compose -f docker/docker-compose.yaml up
+## Features
+
+- Monitor PRs across multiple repositories from one view
+- Actions: **approve**, **request changes**, **comment**, **merge**, **close**, **line-level comments**
+- Secure token loading: environment variable → keychain → first-run prompt
+- Async polling with optional realtime webhook mode
+- In-app settings editor — no file editing required after initial setup
+
+---
+
+## Authentication
+
+### PAT (default)
+
+Set `GITHUB_TOKEN` in `.env`. Token needs `repo` scope; add `read:org` for organisation repositories.
+
+### GitHub App
+
+```yaml
+# config.yaml
+auth_mode: github_app
+
+github_app:
+  enabled: true
+  app_id: "12345"
+  installation_id: "67890"
+  private_key_path: "/run/secrets/app.pem"   # path inside the container
 ```
 
-Then open **http://localhost:6080/vnc.html** in your browser.
-
-### Passing in a config file
-
-Mount your local `config.yaml` read-only:
-
-```bash
--v "$PWD/config.yaml:/app/config.yaml:ro"
-```
-
-See `config.example.yaml` for the full schema (repositories, poll interval, auth mode, webhook settings).
-
-### Using GitHub App authentication in Docker
-
-Mount the private key PEM into the container and point the env var at it:
+Mount the PEM key when running:
 
 ```bash
 docker run --rm \
@@ -198,52 +154,41 @@ docker run --rm \
   ghcr.io/dpsiom/github-pr-monitor:latest
 ```
 
-### Troubleshooting Docker
+---
 
-| Symptom | Fix |
-|---|---|
-| Browser shows "connection refused" | Wait ~3 s for the container to fully start, then refresh |
-| Blank / black browser window | Reload the page; the app may still be initialising |
-| `GITHUB_TOKEN` invalid | Ensure the token has `repo` scope |
-| Empty PR list | Verify `config.yaml` repository names are in `owner/repo` format |
-| Port 6080 already in use | Change the host port: `-p 6081:6080` and open `http://localhost:6081/vnc.html` |
+## Running natively (Python)
 
-## Tooling and Quality Gates
-
-Run checks:
+Requires Python 3.11+, Tk, and a local display.
 
 ```bash
-pytest --cov=src --cov-report=term-missing
-mypy src --strict
-ruff check src tests
-bandit -r src
+pip install -e .
+cp config.example.yaml config.yaml   # edit as above
+cp .env.example .env                  # set GITHUB_TOKEN
+python -m src.main
 ```
 
-## Build and Release Artifacts
-
-- Pull requests run a cross-platform build artifact workflow to verify packaging on macOS, Linux, and Windows.
-- Tagging a release with `v*` runs a cross-platform release workflow and uploads packaged binaries to the GitHub Release.
-- Each release upload includes a platform checksum file (`SHA256SUMS-<OS>.txt`).
-- CI enforces explicit version-tag refs for third-party GitHub Actions in workflow files.
-
-## Dependency Automation
-
-- Dependabot is configured in `.github/dependabot.yml` for weekly updates to pip dependencies and GitHub Actions references.
-
-Verify a downloaded asset:
-
-```bash
-shasum -a 256 -c SHA256SUMS-Linux.txt
-```
+---
 
 ## Troubleshooting
 
-- **Invalid token** — ensure token is active and includes `repo` scope.
-- **Empty PR list** — verify repository names are in `owner/repo` format and the token has access.
-- **Rate limit errors** — increase `monitor.poll_interval_seconds` (minimum 30) and retry later.
-- **Keychain issues** — clear the stored keychain item and re-enter the token at the first-run prompt.
-- **Docker GUI issues** — see the Docker troubleshooting table above.
+| Symptom | Fix |
+|---|---|
+| `docker pull` denied | Image not yet published — build locally: `docker build -f docker/Dockerfile -t github-pr-monitor .` then use `github-pr-monitor` as the image name |
+| Browser "connection refused" | Wait ~5 s for the container to start, then refresh |
+| Blank / black browser window | Reload — the app may still be initialising |
+| Empty PR list | Check `config.yaml` repository names are `owner/repo` format and token has access |
+| `GITHUB_TOKEN` invalid | Ensure token has `repo` scope and hasn't expired |
+| Port 6080 in use | Use `-p 6081:6080` and open `http://localhost:6081/vnc.html` |
+| Rate limit errors | Increase `monitor.poll_interval_seconds` (minimum 30) |
+
+---
 
 ## Screenshots
 
-Add screenshots under docs/images and reference them here once captured.
+Add screenshots under `docs/images/` and reference them here.
+
+---
+
+## Contributing and development
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup, quality gates, branch workflow, and release process.
