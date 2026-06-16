@@ -25,6 +25,20 @@ ENV HOME=/app
 # Pre-create the X11 socket directory with sticky bit so non-root Xvfb can use it
 RUN mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
 
+# Replace the noVNC default page with an immediate redirect so that browsing to
+# http://localhost:6080 (or http://127.0.0.1:6080) opens the VNC viewer
+# automatically with auto-connect and scaling enabled.
+RUN printf '<!DOCTYPE html>\n\
+<html>\n\
+<head>\n\
+  <meta charset="utf-8"/>\n\
+  <title>GitHub PR Monitor</title>\n\
+  <meta http-equiv="refresh" content="0; url=vnc.html?autoconnect=true&amp;resize=scale"/>\n\
+  <script>window.location.replace("vnc.html?autoconnect=true&resize=scale");</script>\n\
+</head>\n\
+<body></body>\n\
+</html>\n' > /usr/share/novnc/index.html
+
 WORKDIR /app
 
 COPY pyproject.toml README.md ./
@@ -37,7 +51,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 USER app
 
-# noVNC is served on this port; open http://localhost:6080/vnc.html in a browser
+# Browse to http://localhost:6080 — the index page redirects automatically
 EXPOSE 6080
 
 ENTRYPOINT ["/entrypoint.sh"]
