@@ -28,7 +28,6 @@ x11vnc -display :0 -nopw -listen localhost -forever -shared -quiet &
 # ---------------------------------------------------------------------------
 # 3. Start noVNC — serves the browser-based VNC client on port 6080
 #    Open http://localhost:6080 in Safari or Chrome on your Mac
-#    Add ?autoconnect=true&resize=scale for an auto-connecting scaled view
 # ---------------------------------------------------------------------------
 websockify --web /usr/share/novnc 6080 localhost:5900 &
 
