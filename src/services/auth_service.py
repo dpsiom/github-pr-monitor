@@ -108,6 +108,10 @@ class AuthService:
 
         if self.settings.config.auth_mode == "pat":
             scopes = response.headers.get("X-OAuth-Scopes", "")
-            scope_set = {scope.strip() for scope in scopes.split(",") if scope.strip()}
-            if "repo" not in scope_set:
-                raise PermissionError("Token is missing required repo scope")
+            # Fine-grained PATs do not populate X-OAuth-Scopes (the header is
+            # absent or empty). Only enforce scope check for classic PATs that
+            # actually advertise their scopes.
+            if scopes:
+                scope_set = {s.strip() for s in scopes.split(",") if s.strip()}
+                if "repo" not in scope_set:
+                    raise PermissionError("Token is missing required repo scope")
