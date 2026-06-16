@@ -1,0 +1,14 @@
+#!/bin/sh
+set -e
+
+branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || echo "")
+
+case "$branch" in
+  main|master)
+    echo "[hooks] Direct commits to '$branch' are blocked." >&2
+    echo "[hooks] Create a feature branch, commit there, and open a PR." >&2
+    exit 1
+    ;;
+esac
+
+exit 0
