@@ -1,0 +1,18 @@
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      # GitHub App auth (optional — leave blank if using a PAT)
+      - GITHUB_APP_ID=${GITHUB_APP_ID:-}
+      - GITHUB_APP_INSTALLATION_ID=${GITHUB_APP_INSTALLATION_ID:-}
+      - GITHUB_APP_PRIVATE_KEY_PATH=${GITHUB_APP_PRIVATE_KEY_PATH:-}
+    volumes:
+      - ../config.yaml:/app/config.yaml:ro
+      # Mount the PEM key only if using GitHub App auth
+      # - /absolute/path/to/app.pem:/run/secrets/app.pem:ro
+    ports:
+      # noVNC browser interface — open http://localhost:6080/vnc.html
+      - "6080:6080"

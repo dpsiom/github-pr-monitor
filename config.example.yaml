@@ -1,0 +1,24 @@
+repositories:
+  - name: owner-one/repo-one
+    enabled: true
+  - name: owner-two/repo-two
+    enabled: false
+
+organization_monitoring: false
+organization: null
+
+monitor:
+  poll_interval_seconds: 60
+  realtime_mode: polling
+  smee_url: null
+  webhook_host: 127.0.0.1
+  webhook_port: 8765
+  webhook_secret: null
+
+auth_mode: pat
+
+github_app:
+  enabled: false
+  app_id: null
+  installation_id: null
+  private_key_path: null

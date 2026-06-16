@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.3
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+      - name: Ruff
+        run: ruff check src tests
+      - name: Mypy
+        run: mypy src --strict
+      - name: Tests
+        run: pytest --cov=src --cov-report=term-missing
+      - name: Bandit
+        run: bandit -r src
+
+  workflow-safety:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.3
+      - name: Validate workflow syntax
+        uses: rhysd/actionlint@v1.7.12
+      - name: Enforce action reference pinning policy
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          workflow_dir = Path('.github/workflows')
+          use_re = re.compile(r'^\s*-?\s*uses:\s*([^\s]+)\s*$', re.IGNORECASE)
+
+          violations = []
+          for path in sorted(workflow_dir.glob('*.y*ml')):
+              for line_no, line in enumerate(path.read_text(encoding='utf-8').splitlines(), start=1):
+                  m = use_re.match(line)
+                  if not m:
+                      continue
+                  ref = m.group(1).strip().strip('"\'')
+                  if ref.startswith('./'):
+                      continue
+                  if '@' not in ref:
+                      violations.append((path, line_no, ref, 'missing @ref'))
+                      continue
+                  target = ref.rsplit('@', 1)[1]
+                  is_tag = bool(re.fullmatch(r'v\d+(?:\.\d+){0,2}(?:[-+][A-Za-z0-9.-]+)?', target))
+                  if not is_tag:
+                      violations.append((path, line_no, ref, 'must use a version tag like v6 or v6.0.3'))
+
+          if violations:
+              print('Action pinning policy violations found:')
+              for path, line_no, ref, reason in violations:
+                  print(f'- {path}:{line_no} -> {ref} ({reason})')
+              sys.exit(1)
+
+          print('Action pinning policy check passed.')
+          PY
