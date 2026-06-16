@@ -19,6 +19,12 @@ RUN pip install --no-cache-dir websockify
 
 RUN addgroup --system app && adduser --system --ingroup app app
 
+# Writable home directory (default /nonexistent causes font/config errors)
+ENV HOME=/app
+
+# Pre-create the X11 socket directory with sticky bit so non-root Xvfb can use it
+RUN mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
+
 WORKDIR /app
 
 COPY pyproject.toml README.md ./
