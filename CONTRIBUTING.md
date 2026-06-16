@@ -5,6 +5,11 @@
 1. Install Python 3.11+.
 2. Create virtual environment.
 3. Install dependencies with dev extras.
+4. Enable repository hooks to block direct commit/push to main:
+
+```bash
+git config core.hooksPath .githooks
+```
 
 ## Quality Bar
 
