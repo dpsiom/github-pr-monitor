@@ -1,0 +1,116 @@
+name: Publish Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release — with or without 'v' prefix (e.g. 1.2.0 or v1.2.0)"
+        required: true
+        type: string
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.normalise.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v6.0.3
+        with:
+          fetch-depth: 0
+
+      - name: Normalise version tag
+        id: normalise
+        run: |
+          RAW="${{ inputs.version }}"
+          # Prepend 'v' if the user omitted it
+          TAG="${RAW#v}"
+          TAG="v${TAG}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Resolved tag: ${TAG}"
+
+      - name: Create and push tag
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "${{ steps.normalise.outputs.tag }}" -m "Release ${{ steps.normalise.outputs.tag }}"
+          git push origin "${{ steps.normalise.outputs.tag }}"
+
+  build:
+    needs: tag
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6.0.3
+        with:
+          ref: ${{ needs.tag.outputs.tag }}
+
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install -e .
+
+      - name: Build executable
+        run: pyinstaller --noconfirm --clean --onefile --name github-pr-monitor src/main.py
+
+      - name: Package artifact (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          TAG="${{ needs.tag.outputs.tag }}"
+          PKG="github-pr-monitor-${RUNNER_OS}-${TAG}.tar.gz"
+          tar -czf "dist/${PKG}" -C dist github-pr-monitor
+          shasum -a 256 "dist/${PKG}" > "dist/SHA256SUMS-${RUNNER_OS}.txt"
+
+      - name: Package artifact (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $tag = "${{ needs.tag.outputs.tag }}"
+          $pkg = "github-pr-monitor-$env:RUNNER_OS-${tag}.zip"
+          Compress-Archive -Path dist/github-pr-monitor.exe -DestinationPath "dist/$pkg" -Force
+          (Get-FileHash "dist/$pkg" -Algorithm SHA256).Hash + "  $pkg" | Out-File -FilePath "dist/SHA256SUMS-$env:RUNNER_OS.txt" -Encoding ascii
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: build-${{ matrix.os }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/SHA256SUMS-*.txt
+
+  release:
+    needs: [tag, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4.3.0
+        with:
+          pattern: build-*
+          merge-multiple: true
+          path: dist/
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v3.0.0
+        with:
+          tag_name: ${{ needs.tag.outputs.tag }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/SHA256SUMS-*.txt
