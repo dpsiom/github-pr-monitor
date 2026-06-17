@@ -1,6 +1,6 @@
 services:
   app:
-    # Published image — pulled automatically on first run
+    # Published image - pulled automatically on first run
     image: ghcr.io/dpsiom/github-pr-monitor:latest
 
     # Uncomment the section below (and comment out 'image:' above) to build locally from source:
@@ -10,12 +10,12 @@ services:
 
     environment:
       - GITHUB_TOKEN=${GITHUB_TOKEN}
-      # GitHub App auth (optional — leave blank if using a PAT)
+      # GitHub App auth (optional - leave blank if using a PAT)
       - GITHUB_APP_ID=${GITHUB_APP_ID:-}
       - GITHUB_APP_INSTALLATION_ID=${GITHUB_APP_INSTALLATION_ID:-}
       - GITHUB_APP_PRIVATE_KEY_PATH=${GITHUB_APP_PRIVATE_KEY_PATH:-}
     volumes:
-      - ./config.yaml:/app/config.yaml:ro
+      - ../config.yaml:/app/config.yaml:ro
       # Mount the PEM key only if using GitHub App auth:
       # - /absolute/path/to/app.pem:/run/secrets/app.pem:ro
     ports:
