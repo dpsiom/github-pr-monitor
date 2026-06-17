@@ -161,9 +161,16 @@
                             &middot; ${escapeHtml(pr.head_branch)} → ${escapeHtml(pr.base_branch)}
                         </p>
                     </div>
-                    <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium ${ciColor(pr.ci_status)}">
-                        ${pr.ci_status}
-                    </span>
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                        <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium ${ciColor(pr.ci_status)}">
+                            ${pr.ci_status}
+                        </span>
+                        <a href="${pr.html_url}" target="_blank" rel="noopener"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-surface hover:bg-surface-hover border border-border transition-colors text-gray-300 hover:text-white">
+                            <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 16 16"><path d="M3.75 2h3.5a.75.75 0 0 1 0 1.5h-3.5a.25.25 0 0 0-.25.25v8.5c0 .138.112.25.25.25h8.5a.25.25 0 0 0 .25-.25v-3.5a.75.75 0 0 1 1.5 0v3.5A1.75 1.75 0 0 1 12.25 14h-8.5A1.75 1.75 0 0 1 2 12.25v-8.5C2 2.784 2.784 2 3.75 2Zm6.854-1h4.146a.25.25 0 0 1 .25.25v4.146a.25.25 0 0 1-.427.177L13.03 4.03 9.28 7.78a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042l3.75-3.75-1.543-1.543A.25.25 0 0 1 10.604 1Z"/></svg>
+                            Open on GitHub
+                        </a>
+                    </div>
                 </div>
 
                 <!-- Meta badges -->
@@ -186,6 +193,21 @@
                         <option value="rebase">Rebase</option>
                     </select>
                 </div>
+
+                <!-- Checks / CI status -->
+                ${pr.checks && pr.checks.length ? `
+                <div class="mb-6">
+                    <h3 class="text-sm font-medium text-gray-300 mb-3">Checks (${pr.checks.length})</h3>
+                    <div class="rounded-lg border border-border overflow-hidden divide-y divide-border">
+                        ${pr.checks.map(c => `
+                        <div class="flex items-center gap-3 px-3 py-2 bg-surface-card text-sm">
+                            <span class="flex-shrink-0">${checkIcon(c)}</span>
+                            <span class="flex-1 text-gray-300 truncate">${escapeHtml(c.name)}</span>
+                            <span class="text-xs ${checkColor(c)}">${checkLabel(c)}</span>
+                            ${c.url ? `<a href="${c.url}" target="_blank" rel="noopener" class="text-gray-500 hover:text-accent transition-colors"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg></a>` : ''}
+                        </div>`).join('')}
+                    </div>
+                </div>` : ''}
 
                 <!-- Comment box -->
                 <div class="mb-6">
@@ -278,6 +300,33 @@
         if (s === 'FAILURE' || s === 'ERROR') return 'bg-accent-red/20 text-accent-red';
         if (s === 'PENDING') return 'bg-accent-yellow/20 text-accent-yellow';
         return 'bg-gray-700 text-gray-400';
+    }
+
+    function checkIcon(c) {
+        const conclusion = (c.conclusion || '').toUpperCase();
+        const status = (c.status || '').toUpperCase();
+        if (conclusion === 'SUCCESS') return '<svg class="w-4 h-4 text-accent-green" fill="currentColor" viewBox="0 0 16 16"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"/></svg>';
+        if (conclusion === 'FAILURE') return '<svg class="w-4 h-4 text-accent-red" fill="currentColor" viewBox="0 0 16 16"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"/></svg>';
+        if (status === 'IN_PROGRESS' || status === 'QUEUED' || conclusion === 'PENDING') return '<svg class="w-4 h-4 text-accent-yellow animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>';
+        if (conclusion === 'SKIPPED' || conclusion === 'NEUTRAL') return '<svg class="w-4 h-4 text-gray-500" fill="currentColor" viewBox="0 0 16 16"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Zm9.78-2.22-5.5 5.5a.749.749 0 0 1-1.275-.326.749.749 0 0 1 .215-.734l5.5-5.5a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042Z"/></svg>';
+        return '<svg class="w-4 h-4 text-gray-500" fill="currentColor" viewBox="0 0 16 16"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z"/></svg>';
+    }
+
+    function checkColor(c) {
+        const conclusion = (c.conclusion || '').toUpperCase();
+        const status = (c.status || '').toUpperCase();
+        if (conclusion === 'SUCCESS') return 'text-accent-green';
+        if (conclusion === 'FAILURE') return 'text-accent-red';
+        if (status === 'IN_PROGRESS' || status === 'QUEUED' || conclusion === 'PENDING') return 'text-accent-yellow';
+        return 'text-gray-500';
+    }
+
+    function checkLabel(c) {
+        const conclusion = (c.conclusion || '').toUpperCase();
+        const status = (c.status || '').toUpperCase();
+        if (conclusion) return conclusion.charAt(0) + conclusion.slice(1).toLowerCase();
+        if (status) return status.charAt(0) + status.slice(1).toLowerCase().replace('_', ' ');
+        return 'Unknown';
     }
 
     function fileStatusColor(status) {

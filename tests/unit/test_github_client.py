@@ -85,7 +85,30 @@ async def test_fetch_pending_review_prs_parses_graphql() -> None:
                                 "nodes": [{"additions": 3, "deletions": 1}],
                             },
                             "commits": {
-                                "nodes": [{"commit": {"statusCheckRollup": {"state": "SUCCESS"}}}]
+                                "nodes": [{
+                                    "commit": {
+                                        "statusCheckRollup": {
+                                            "state": "SUCCESS",
+                                            "contexts": {
+                                                "nodes": [
+                                                    {
+                                                        "__typename": "CheckRun",
+                                                        "name": "CI / checks",
+                                                        "status": "COMPLETED",
+                                                        "conclusion": "SUCCESS",
+                                                        "detailsUrl": "https://example/runs/1",
+                                                    },
+                                                    {
+                                                        "__typename": "StatusContext",
+                                                        "context": "deploy",
+                                                        "state": "SUCCESS",
+                                                        "targetUrl": "https://example/deploy",
+                                                    },
+                                                ]
+                                            },
+                                        }
+                                    }
+                                }]
                             },
                         }
                     ]
@@ -103,6 +126,10 @@ async def test_fetch_pending_review_prs_parses_graphql() -> None:
     assert prs[0].number == 12
     assert prs[0].author == "octocat"
     assert prs[0].labels == ["enhancement"]
+    assert len(prs[0].checks) == 2
+    assert prs[0].checks[0].name == "CI / checks"
+    assert prs[0].checks[0].conclusion == "SUCCESS"
+    assert prs[0].checks[1].name == "deploy"
 
 
 @pytest.mark.asyncio

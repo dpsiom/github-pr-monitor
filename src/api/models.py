@@ -17,6 +17,15 @@ class CIStatus(BaseModel):
     pending: int = 0
 
 
+class CheckRun(BaseModel):
+    """Individual CI check run."""
+
+    name: str
+    status: str
+    conclusion: str | None = None
+    url: str | None = None
+
+
 class PRFileSummary(BaseModel):
     """Changed files summary."""
 
@@ -65,5 +74,6 @@ class PullRequest(BaseModel):
     updated_at: datetime
     files: PRFileSummary = Field(default_factory=PRFileSummary)
     ci_status: CIStatus = Field(default_factory=lambda: CIStatus(state="UNKNOWN"))
+    checks: list[CheckRun] = Field(default_factory=list)
     file_changes: list[PRFileChange] = Field(default_factory=list)
     review_comments: list[PRReviewComment] = Field(default_factory=list)
