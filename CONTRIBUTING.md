@@ -10,14 +10,14 @@
 pip install -e .[dev]
 ```
 
-4. Copy example config files:
+1. Copy example config files:
 
 ```bash
 cp config.example.yaml config.yaml
 cp .env.example .env
 ```
 
-5. Enable repository hooks to block direct commit/push to main:
+1. Enable repository hooks to block direct commit/push to main:
 
 ```bash
 git config core.hooksPath .githooks
@@ -38,20 +38,20 @@ All four must pass. Current coverage target: **96%+**.
 
 ## Branch and PR workflow
 
-1. Create a feature branch — never commit directly to `main`:
+1. Create a feature branch - never commit directly to `main`:
 
 ```bash
 git checkout -b feat/my-change
 ```
 
-2. Push and open a PR:
+1. Push and open a PR:
 
 ```bash
 git push -u origin feat/my-change
 gh pr create --base main
 ```
 
-3. CI must pass before merging.
+1. CI must pass before merging.
 
 ## Code standards
 
@@ -63,10 +63,9 @@ gh pr create --base main
 ## CI workflows
 
 | Workflow | Trigger | Purpose |
-|---|---|---|
+| --- | --- | --- |
 | `ci.yaml` | PR to main | Lint, type check, tests, security scan |
-| `build.yaml` | PR to main | Cross-platform PyInstaller build (macOS, Linux, Windows) |
-| `release.yaml` | PR to main | Release build artifact smoke-test |
+| `build.yaml` | Manual (`workflow_dispatch`) + PR to main | Cross-platform PyInstaller build (macOS, Linux, Windows) |
 | `docker.yaml` | PR + push to main | Build Docker image; push to GHCR on merge |
 | `publish.yaml` | Manual (`workflow_dispatch`) | Tag a version and publish GitHub Release |
 
@@ -75,6 +74,7 @@ gh pr create --base main
 Run the **Publish Release** workflow manually from the GitHub Actions tab.
 Enter the version (with or without `v` prefix, e.g. `1.2.0` or `v1.2.0`).
 The workflow will:
+
 - Create and push the git tag
 - Build cross-platform binaries
 - Create a GitHub Release with checksums
@@ -82,6 +82,7 @@ The workflow will:
 ## Dependency updates
 
 Dependabot is configured (`.github/dependabot.yml`) to open weekly PRs for:
+
 - pip package updates
 - GitHub Actions version updates
 
