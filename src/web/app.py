@@ -144,6 +144,15 @@ def _serialize_pr(pr: PullRequest) -> dict[str, Any]:
         "labels": pr.labels,
         "reviewers": pr.reviewers,
         "ci_status": pr.ci_status.state,
+        "checks": [
+            {
+                "name": c.name,
+                "status": c.status,
+                "conclusion": c.conclusion,
+                "url": c.url,
+            }
+            for c in pr.checks
+        ],
         "files": {
             "additions": pr.files.additions,
             "deletions": pr.files.deletions,

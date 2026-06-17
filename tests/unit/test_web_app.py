@@ -7,7 +7,14 @@ from unittest.mock import Mock
 
 import pytest
 
-from src.api.models import CIStatus, PRFileChange, PRFileSummary, PRReviewComment, PullRequest
+from src.api.models import (
+    CheckRun,
+    CIStatus,
+    PRFileChange,
+    PRFileSummary,
+    PRReviewComment,
+    PullRequest,
+)
 from src.config.settings import AppConfig, AppSettings
 from src.web.app import create_app
 
@@ -28,6 +35,10 @@ def _sample_pr() -> PullRequest:
         ci_status=CIStatus(state="SUCCESS"),
         labels=["enhancement"],
         reviewers=["reviewer1"],
+        checks=[
+            CheckRun(name="CI / checks", status="COMPLETED", conclusion="SUCCESS", url="https://github.com/runs/1"),
+            CheckRun(name="CI / build", status="COMPLETED", conclusion="FAILURE", url="https://github.com/runs/2"),
+        ],
         file_changes=[
             PRFileChange(
                 path="src/main.py", status="modified", additions=3, deletions=1, patch="+a\n-b"
@@ -86,6 +97,10 @@ def test_api_pr_detail(client):
     assert len(data["file_changes"]) == 1
     assert data["file_changes"][0]["path"] == "src/main.py"
     assert len(data["review_comments"]) == 1
+    assert len(data["checks"]) == 2
+    assert data["checks"][0]["name"] == "CI / checks"
+    assert data["checks"][0]["conclusion"] == "SUCCESS"
+    assert data["checks"][1]["conclusion"] == "FAILURE"
     pr_service.get_pull_request_details.assert_called_once()
 
 

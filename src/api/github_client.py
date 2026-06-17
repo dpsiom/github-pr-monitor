@@ -11,7 +11,14 @@ import aiohttp
 from github import Github
 from github.PullRequest import PullRequest as PyGithubPullRequest
 
-from src.api.models import CIStatus, PRFileChange, PRFileSummary, PRReviewComment, PullRequest
+from src.api.models import (
+    CheckRun,
+    CIStatus,
+    PRFileChange,
+    PRFileSummary,
+    PRReviewComment,
+    PullRequest,
+)
 from src.config.settings import AppSettings
 from src.utils.rate_limiter import with_exponential_backoff
 
@@ -121,6 +128,23 @@ class GitHubRepositoryGateway:
                     commit {
                       statusCheckRollup {
                         state
+                        contexts(first: 50) {
+                          nodes {
+                            ... on CheckRun {
+                              __typename
+                              name
+                              status
+                              conclusion
+                              detailsUrl
+                            }
+                            ... on StatusContext {
+                              __typename
+                              context
+                              state
+                              targetUrl
+                            }
+                          }
+                        }
                       }
                     }
                   }
@@ -149,13 +173,31 @@ class GitHubRepositoryGateway:
                 if req.get("requestedReviewer") and req["requestedReviewer"].get("login")
             ]
             file_node = (node.get("files", {}).get("nodes", []) or [{}])[0]
-            ci_state = (
+            commit_node = (
                 node.get("commits", {})
                 .get("nodes", [{}])[0]
                 .get("commit", {})
-                .get("statusCheckRollup", {})
-                .get("state", "UNKNOWN")
             )
+            rollup = commit_node.get("statusCheckRollup") or {}
+            ci_state = rollup.get("state", "UNKNOWN")
+
+            checks: list[CheckRun] = []
+            for ctx in (rollup.get("contexts", {}).get("nodes", []) or []):
+                typename = ctx.get("__typename", "")
+                if typename == "CheckRun":
+                    checks.append(CheckRun(
+                        name=ctx.get("name", ""),
+                        status=ctx.get("status", ""),
+                        conclusion=ctx.get("conclusion"),
+                        url=ctx.get("detailsUrl"),
+                    ))
+                elif typename == "StatusContext":
+                    checks.append(CheckRun(
+                        name=ctx.get("context", ""),
+                        status=ctx.get("state", ""),
+                        conclusion=ctx.get("state"),
+                        url=ctx.get("targetUrl"),
+                    ))
 
             parsed.append(
                 PullRequest(
@@ -180,6 +222,7 @@ class GitHubRepositoryGateway:
                         changed_files=node.get("files", {}).get("totalCount", 0),
                     ),
                     ci_status=CIStatus(state=ci_state),
+                    checks=checks,
                 )
             )
 
