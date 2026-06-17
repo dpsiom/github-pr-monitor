@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import sys
-import types
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -83,35 +81,14 @@ def test_get_token_from_keychain(mock_keychain: Mock, monkeypatch: pytest.Monkey
     mock_keychain.assert_called_once()
 
 
-@patch("src.services.auth_service.save_token_to_keychain")
 @patch("src.services.auth_service.get_token_from_keychain", return_value=None)
-def test_get_token_from_prompt(
-    mock_keychain: Mock, mock_save: Mock, monkeypatch: pytest.MonkeyPatch
+def test_get_token_raises_when_no_source(
+    mock_keychain: Mock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-    fake_tk = types.ModuleType("tkinter")
-    fake_tk.simpledialog = types.SimpleNamespace(askstring=lambda **_kwargs: " prompted ")
-
-    with patch.dict(sys.modules, {"tkinter": fake_tk}):
-        auth = AuthService(AppSettings())
-        token = auth.get_or_request_token()
-
-    assert token == "prompted"
-    mock_keychain.assert_called_once()
-    mock_save.assert_called_once()
-
-
-@patch("src.services.auth_service.get_token_from_keychain", return_value=None)
-def test_get_token_prompt_required(mock_keychain: Mock, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-    fake_tk = types.ModuleType("tkinter")
-    fake_tk.simpledialog = types.SimpleNamespace(askstring=lambda **_kwargs: "")
-
-    with patch.dict(sys.modules, {"tkinter": fake_tk}):
-        auth = AuthService(AppSettings())
-        with pytest.raises(ValueError):
-            auth.get_or_request_token()
-
+    auth = AuthService(AppSettings())
+    with pytest.raises(ValueError, match="GitHub token is required"):
+        auth.get_or_request_token()
     mock_keychain.assert_called_once()
 
 

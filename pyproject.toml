@@ -5,19 +5,18 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "github-pr-monitor"
 version = "0.1.0"
-description = "Desktop app to monitor and action GitHub pull requests"
+description = "Web app to monitor and action GitHub pull requests"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "aiohttp>=3.10.0",
-  "customtkinter>=5.2.0",
+  "flask>=3.0.0",
   "keyring>=25.0.0",
   "PyJWT>=2.8.0",
   "PyGithub>=2.3.0",
   "pydantic>=2.8.0",
   "python-dotenv>=1.0.1",
   "PyYAML>=6.0.1",
-  "Pygments>=2.18.0",
   "requests>=2.32.0",
 ]
 

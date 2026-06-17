@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>GitHub PR Monitor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        surface: { DEFAULT: '#0d1117', card: '#161b22', hover: '#1c2128' },
+                        border: { DEFAULT: '#30363d' },
+                        accent: { DEFAULT: '#58a6ff', green: '#3fb950', red: '#f85149', yellow: '#d29922', purple: '#a371f7' },
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Noto Sans, Helvetica, Arial, sans-serif; }
+        .scrollbar-thin::-webkit-scrollbar { width: 6px; }
+        .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+        .scrollbar-thin::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+        .patch-line-add { color: #3fb950; background: rgba(63, 185, 80, 0.1); }
+        .patch-line-del { color: #f85149; background: rgba(248, 81, 73, 0.1); }
+        .patch-line-hunk { color: #a371f7; }
+        .fade-in { animation: fadeIn 0.2s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="h-full bg-surface text-gray-200 dark">
+    <div id="app" class="h-full flex flex-col">
+        <!-- Header -->
+        <header class="flex items-center justify-between px-6 py-3 border-b border-border bg-surface-card">
+            <div class="flex items-center gap-3">
+                <svg class="w-7 h-7 text-accent" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/>
+                </svg>
+                <h1 class="text-lg font-semibold text-white">PR Monitor</h1>
+            </div>
+            <div class="flex items-center gap-4">
+                <span id="status" class="text-xs text-gray-400"></span>
+                <button onclick="refresh()" class="px-3 py-1.5 text-xs font-medium rounded-md bg-surface hover:bg-surface-hover border border-border transition-colors">
+                    Refresh
+                </button>
+            </div>
+        </header>
+
+        <!-- Main content -->
+        <div class="flex-1 flex overflow-hidden">
+            <!-- PR List sidebar -->
+            <aside id="pr-list" class="w-96 border-r border-border overflow-y-auto scrollbar-thin flex-shrink-0">
+                <div id="pr-items" class="p-3 space-y-1"></div>
+                <div id="empty-state" class="hidden p-8 text-center text-gray-500">
+                    <svg class="w-12 h-12 mx-auto mb-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                    </svg>
+                    <p class="text-sm">No open pull requests</p>
+                </div>
+            </aside>
+
+            <!-- Detail panel -->
+            <main id="detail-panel" class="flex-1 overflow-y-auto scrollbar-thin p-6">
+                <div id="detail-empty" class="h-full flex items-center justify-center text-gray-500">
+                    <div class="text-center">
+                        <svg class="w-16 h-16 mx-auto mb-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"/>
+                        </svg>
+                        <p class="text-sm">Select a pull request to view details</p>
+                    </div>
+                </div>
+                <div id="detail-content" class="hidden fade-in"></div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+    let selectedPR = null;
+    let pollInterval = null;
+
+    async function fetchPRs() {
+        try {
+            const res = await fetch('/api/prs');
+            const data = await res.json();
+            renderPRList(data.prs);
+            document.getElementById('status').textContent = data.status || '';
+        } catch (e) {
+            document.getElementById('status').textContent = 'Connection error';
+        }
+    }
+
+    function renderPRList(prs) {
+        const container = document.getElementById('pr-items');
+        const empty = document.getElementById('empty-state');
+        if (!prs.length) {
+            container.innerHTML = '';
+            empty.classList.remove('hidden');
+            return;
+        }
+        empty.classList.add('hidden');
+        container.innerHTML = prs.map(pr => `
+            <button onclick="selectPR('${pr.repo}', ${pr.number})"
+                class="w-full text-left px-3 py-2.5 rounded-lg transition-colors ${
+                    selectedPR && selectedPR.repo === pr.repo && selectedPR.number === pr.number
+                    ? 'bg-accent/10 border border-accent/30'
+                    : 'hover:bg-surface-hover border border-transparent'
+                }">
+                <div class="flex items-start justify-between gap-2">
+                    <div class="min-w-0 flex-1">
+                        <p class="text-sm font-medium text-white truncate">${escapeHtml(pr.title)}</p>
+                        <p class="text-xs text-gray-400 mt-0.5">${escapeHtml(pr.repo)} #${pr.number}</p>
+                    </div>
+                    <span class="flex-shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${ciColor(pr.ci_status)}">
+                        ${pr.ci_status}
+                    </span>
+                </div>
+                <div class="flex items-center gap-3 mt-1.5 text-xs text-gray-500">
+                    <span>${escapeHtml(pr.author)}</span>
+                    <span class="text-accent-green">+${pr.files.additions}</span>
+                    <span class="text-accent-red">-${pr.files.deletions}</span>
+                    ${pr.is_draft ? '<span class="text-accent-yellow">Draft</span>' : ''}
+                </div>
+            </button>
+        `).join('');
+    }
+
+    async function selectPR(repo, number) {
+        document.getElementById('detail-empty').classList.add('hidden');
+        const content = document.getElementById('detail-content');
+        content.classList.remove('hidden');
+        content.innerHTML = '<div class="flex items-center justify-center py-12"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div></div>';
+
+        try {
+            const res = await fetch(`/api/prs/${repo}/${number}`);
+            const pr = await res.json();
+            if (pr.error) throw new Error(pr.error);
+            selectedPR = pr;
+            renderDetail(pr);
+            fetchPRs(); // re-render list to highlight selection
+        } catch (e) {
+            content.innerHTML = `<div class="text-accent-red text-sm">${escapeHtml(e.message)}</div>`;
+        }
+    }
+
+    function renderDetail(pr) {
+        const content = document.getElementById('detail-content');
+        content.innerHTML = `
+            <div class="fade-in">
+                <!-- Header -->
+                <div class="flex items-start justify-between gap-4 mb-6">
+                    <div>
+                        <h2 class="text-xl font-semibold text-white">${escapeHtml(pr.title)}</h2>
+                        <p class="text-sm text-gray-400 mt-1">
+                            <a href="${pr.html_url}" target="_blank" class="hover:text-accent transition-colors">
+                                ${escapeHtml(pr.repo)} #${pr.number}
+                            </a>
+                            &middot; ${escapeHtml(pr.author)}
+                            &middot; ${escapeHtml(pr.head_branch)} → ${escapeHtml(pr.base_branch)}
+                        </p>
+                    </div>
+                    <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium ${ciColor(pr.ci_status)}">
+                        ${pr.ci_status}
+                    </span>
+                </div>
+
+                <!-- Meta badges -->
+                <div class="flex flex-wrap gap-2 mb-6">
+                    ${pr.labels.map(l => `<span class="px-2 py-0.5 rounded-full text-xs bg-accent-purple/20 text-accent-purple border border-accent-purple/30">${escapeHtml(l)}</span>`).join('')}
+                    ${pr.reviewers.map(r => `<span class="px-2 py-0.5 rounded-full text-xs bg-accent/10 text-accent border border-accent/30">👤 ${escapeHtml(r)}</span>`).join('')}
+                    ${pr.is_draft ? '<span class="px-2 py-0.5 rounded-full text-xs bg-accent-yellow/20 text-accent-yellow border border-accent-yellow/30">Draft</span>' : ''}
+                </div>
+
+                <!-- Actions -->
+                <div class="flex flex-wrap gap-2 mb-6 p-4 rounded-lg bg-surface-card border border-border">
+                    <button onclick="doAction('approve')" class="px-3 py-1.5 rounded-md text-xs font-medium bg-accent-green/20 text-accent-green hover:bg-accent-green/30 border border-accent-green/30 transition-colors">Approve</button>
+                    <button onclick="doAction('request_changes')" class="px-3 py-1.5 rounded-md text-xs font-medium bg-accent-yellow/20 text-accent-yellow hover:bg-accent-yellow/30 border border-accent-yellow/30 transition-colors">Request Changes</button>
+                    <button onclick="doAction('comment')" class="px-3 py-1.5 rounded-md text-xs font-medium bg-accent/20 text-accent hover:bg-accent/30 border border-accent/30 transition-colors">Comment</button>
+                    <button onclick="doAction('merge')" class="px-3 py-1.5 rounded-md text-xs font-medium bg-accent-purple/20 text-accent-purple hover:bg-accent-purple/30 border border-accent-purple/30 transition-colors">Merge</button>
+                    <button onclick="doAction('close')" class="px-3 py-1.5 rounded-md text-xs font-medium bg-accent-red/20 text-accent-red hover:bg-accent-red/30 border border-accent-red/30 transition-colors">Close</button>
+                    <select id="merge-method" class="ml-auto px-2 py-1 rounded-md text-xs bg-surface border border-border text-gray-300">
+                        <option value="merge">Merge</option>
+                        <option value="squash">Squash</option>
+                        <option value="rebase">Rebase</option>
+                    </select>
+                </div>
+
+                <!-- Comment box -->
+                <div class="mb-6">
+                    <textarea id="comment-box" rows="3" placeholder="Add a comment (optional for approve/merge, required for comment/request changes)..."
+                        class="w-full px-3 py-2 rounded-lg bg-surface border border-border text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-accent/50 resize-y"></textarea>
+                </div>
+
+                <!-- Description -->
+                ${pr.body ? `
+                <div class="mb-6">
+                    <h3 class="text-sm font-medium text-gray-300 mb-2">Description</h3>
+                    <div class="p-4 rounded-lg bg-surface-card border border-border text-sm text-gray-300 whitespace-pre-wrap">${escapeHtml(pr.body)}</div>
+                </div>` : ''}
+
+                <!-- Changed Files -->
+                ${pr.file_changes && pr.file_changes.length ? `
+                <div class="mb-6">
+                    <h3 class="text-sm font-medium text-gray-300 mb-3">Changed Files (${pr.file_changes.length})</h3>
+                    <div class="space-y-2">
+                        ${pr.file_changes.map(f => `
+                        <details class="group rounded-lg border border-border overflow-hidden">
+                            <summary class="flex items-center gap-3 px-3 py-2 bg-surface-card cursor-pointer hover:bg-surface-hover transition-colors">
+                                <span class="text-xs px-1.5 py-0.5 rounded font-mono ${fileStatusColor(f.status)}">${f.status[0].toUpperCase()}</span>
+                                <span class="text-sm text-gray-300 font-mono truncate flex-1">${escapeHtml(f.path)}</span>
+                                <span class="text-xs text-accent-green">+${f.additions}</span>
+                                <span class="text-xs text-accent-red">-${f.deletions}</span>
+                            </summary>
+                            ${f.patch ? `<pre class="px-4 py-3 text-xs font-mono overflow-x-auto bg-surface">${formatPatch(f.patch)}</pre>` : ''}
+                        </details>`).join('')}
+                    </div>
+                </div>` : ''}
+
+                <!-- Review Comments -->
+                ${pr.review_comments && pr.review_comments.length ? `
+                <div class="mb-6">
+                    <h3 class="text-sm font-medium text-gray-300 mb-3">Review Comments (${pr.review_comments.length})</h3>
+                    <div class="space-y-3">
+                        ${pr.review_comments.map(c => `
+                        <div class="p-3 rounded-lg bg-surface-card border border-border">
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="text-xs font-medium text-accent">${escapeHtml(c.author)}</span>
+                                ${c.path ? `<span class="text-xs text-gray-500 font-mono">${escapeHtml(c.path)}${c.line ? ':' + c.line : ''}</span>` : ''}
+                            </div>
+                            <p class="text-sm text-gray-300 whitespace-pre-wrap">${escapeHtml(c.body)}</p>
+                        </div>`).join('')}
+                    </div>
+                </div>` : ''}
+            </div>
+        `;
+    }
+
+    async function doAction(action) {
+        if (!selectedPR) return;
+        const comment = document.getElementById('comment-box')?.value || '';
+        const mergeMethod = document.getElementById('merge-method')?.value || 'merge';
+
+        try {
+            const res = await fetch(`/api/prs/${selectedPR.repo}/${selectedPR.number}/action`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action, comment: comment || null, merge_method: mergeMethod }),
+            });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            showToast(data.message, 'success');
+            // Reload detail after action
+            setTimeout(() => selectPR(selectedPR.repo, selectedPR.number), 1500);
+        } catch (e) {
+            showToast(e.message, 'error');
+        }
+    }
+
+    async function refresh() {
+        await fetch('/api/refresh', { method: 'POST' });
+        setTimeout(fetchPRs, 1000);
+    }
+
+    function formatPatch(patch) {
+        return patch.split('\n').map(line => {
+            if (line.startsWith('@@')) return `<span class="patch-line-hunk">${escapeHtml(line)}</span>`;
+            if (line.startsWith('+')) return `<span class="patch-line-add">${escapeHtml(line)}</span>`;
+            if (line.startsWith('-')) return `<span class="patch-line-del">${escapeHtml(line)}</span>`;
+            return escapeHtml(line);
+        }).join('\n');
+    }
+
+    function ciColor(status) {
+        const s = (status || '').toUpperCase();
+        if (s === 'SUCCESS') return 'bg-accent-green/20 text-accent-green';
+        if (s === 'FAILURE' || s === 'ERROR') return 'bg-accent-red/20 text-accent-red';
+        if (s === 'PENDING') return 'bg-accent-yellow/20 text-accent-yellow';
+        return 'bg-gray-700 text-gray-400';
+    }
+
+    function fileStatusColor(status) {
+        if (status === 'added') return 'bg-accent-green/20 text-accent-green';
+        if (status === 'removed') return 'bg-accent-red/20 text-accent-red';
+        return 'bg-accent-yellow/20 text-accent-yellow';
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function showToast(message, type) {
+        const toast = document.createElement('div');
+        toast.className = `fixed bottom-4 right-4 px-4 py-2 rounded-lg text-sm font-medium shadow-lg z-50 fade-in ${
+            type === 'error' ? 'bg-accent-red/90 text-white' : 'bg-accent-green/90 text-white'
+        }`;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 4000);
+    }
+
+    // Start polling
+    fetchPRs();
+    pollInterval = setInterval(fetchPRs, 10000);
+    </script>
+</body>
+</html>
