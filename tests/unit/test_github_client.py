@@ -152,7 +152,24 @@ async def test_fetch_pull_request_details_populates_changes_and_comments() -> No
             "created_at": "2026-06-15T15:00:00Z",
         }
     ]
-    session = DummySession(post_payloads=[], get_payloads=[files_payload, comments_payload])
+    issue_comments_payload = [
+        {
+            "user": {"login": "copilot[bot]", "type": "Bot"},
+            "body": "Automated review suggestion",
+            "author_association": "NONE",
+            "created_at": "2026-06-15T16:00:00Z",
+        },
+        {
+            "user": {"login": "octocat", "type": "User"},
+            "body": "Thanks for the review",
+            "author_association": "MEMBER",
+            "created_at": "2026-06-15T17:00:00Z",
+        },
+    ]
+    session = DummySession(
+        post_payloads=[],
+        get_payloads=[files_payload, comments_payload, issue_comments_payload],
+    )
 
     with patch("src.api.github_client.aiohttp.ClientSession", return_value=session):
         gateway = GitHubRepositoryGateway(settings=AppSettings(), token="token")
@@ -173,6 +190,11 @@ async def test_fetch_pull_request_details_populates_changes_and_comments() -> No
 
     assert detailed.file_changes[0].path == "src/main.py"
     assert detailed.review_comments[0].author == "reviewer1"
+    assert len(detailed.comments) == 2
+    assert detailed.comments[0].author == "copilot[bot]"
+    assert detailed.comments[0].is_bot is True
+    assert detailed.comments[1].author == "octocat"
+    assert detailed.comments[1].is_bot is False
 
 
 @pytest.mark.asyncio

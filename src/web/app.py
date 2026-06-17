@@ -185,4 +185,14 @@ def _serialize_pr_detail(pr: PullRequest) -> dict[str, Any]:
         }
         for c in pr.review_comments
     ]
+    base["comments"] = [
+        {
+            "author": c.author,
+            "body": c.body,
+            "author_association": c.author_association,
+            "is_bot": c.is_bot,
+            "created_at": c.created_at.isoformat() if c.created_at else None,
+        }
+        for c in pr.comments
+    ]
     return base
