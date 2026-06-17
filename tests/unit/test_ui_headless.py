@@ -189,6 +189,9 @@ def test_views_headless() -> None:
         on_action=lambda action, _pr, comment, _m, _p, _n: called.append((action, comment)),
     )
     detail.set_pr(pr)
+    assert "Changed Files:" in detail.body._text
+    assert "Patch:" in detail.body._text
+    assert "\u001b[" not in detail.body._text
     detail.comment_input.insert("1.0", "Ship it")
     detail._trigger("approve")
     assert called and called[0][0] == "approve"
