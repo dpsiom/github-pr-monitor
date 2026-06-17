@@ -9,7 +9,7 @@ import jwt
 import requests
 
 from src.config.settings import AppSettings
-from src.utils.keychain import get_token_from_keychain, save_token_to_keychain
+from src.utils.keychain import get_token_from_keychain
 
 
 class AuthService:
@@ -34,24 +34,10 @@ class AuthService:
         if token:
             return token
 
-        # Import lazily so headless test environments can import this module.
-        from tkinter import simpledialog
-
-        entered = simpledialog.askstring(
-            title="GitHub Token Required",
-            prompt="Enter GitHub PAT (repo scope required):",
-            show="*",
+        raise ValueError(
+            "GitHub token is required. Set GITHUB_TOKEN environment variable "
+            "or store it in the OS keychain."
         )
-        if not entered:
-            raise ValueError("GitHub token is required")
-
-        safe_token = entered.strip()
-        save_token_to_keychain(
-            service_name=self.settings.keychain_service,
-            username=self.settings.keychain_username,
-            token=safe_token,
-        )
-        return safe_token
 
     def _get_github_app_token(self) -> str:
         """Create and exchange a GitHub App JWT for an installation token."""
