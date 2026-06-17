@@ -126,7 +126,17 @@ Docker container
 
 ### PAT (default)
 
-Set `GITHUB_TOKEN` in `.env`. Token needs `repo` scope; add `read:org` for organisation repositories.
+Set `GITHUB_TOKEN` in `.env`.
+
+For a classic PAT, use `repo` scope. Add `read:org` if your repositories are in an organisation with restricted visibility.
+
+For a fine-grained PAT, grant access to each target repository and set these repository permissions:
+
+- Pull requests: **Read and write** (required for approve/request changes/comment/close flows)
+- Contents: **Read and write** (required for merge actions)
+- Metadata: **Read-only** (normally granted automatically)
+
+Use "All repositories" only if you explicitly want that breadth. Otherwise choose "Only select repositories" and include just the repos listed in `config.yaml`.
 
 ### GitHub App
 

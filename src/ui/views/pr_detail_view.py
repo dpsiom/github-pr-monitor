@@ -5,9 +5,6 @@ from __future__ import annotations
 from collections.abc import Callable
 
 import customtkinter as ctk
-from pygments import highlight
-from pygments.formatters import TerminalFormatter
-from pygments.lexers import DiffLexer
 
 from src.api.models import PullRequest
 from src.ui.components.status_badge import StatusBadge
@@ -20,6 +17,8 @@ ActionCallback = Callable[
 
 class PRDetailView(ctk.CTkFrame):  # type: ignore[misc]
     """Displays selected PR details and action controls."""
+
+    MAX_PATCH_LINES = 40
 
     def __init__(self, master: ctk.CTk, on_action: ActionCallback) -> None:
         super().__init__(master)
@@ -135,8 +134,8 @@ class PRDetailView(ctk.CTkFrame):  # type: ignore[misc]
                     (f"- {item.path} ({item.status}) +{item.additions} -{item.deletions}\n"),
                 )
                 if item.patch:
-                    highlighted = highlight(item.patch, DiffLexer(), TerminalFormatter())
-                    self.body.insert("end", f"{highlighted}\n")
+                    self.body.insert("end", self._format_patch(item.patch))
+                self.body.insert("end", "\n")
         else:
             self.body.insert("end", "Changed Files: detail not loaded yet.\n\n")
 
@@ -156,6 +155,14 @@ class PRDetailView(ctk.CTkFrame):  # type: ignore[misc]
             self.body.insert("end", "Review Comments: none.\n")
 
         self.body.configure(state="disabled")
+
+    def _format_patch(self, patch: str) -> str:
+        lines = patch.splitlines()
+        clipped = lines[: self.MAX_PATCH_LINES]
+        rendered = "\n".join(clipped)
+        if len(lines) > self.MAX_PATCH_LINES:
+            rendered += "\n... (patch truncated)"
+        return f"  Patch:\n{rendered}\n"
 
     def _trigger(self, action: str) -> None:
         if not self.current_pr:
