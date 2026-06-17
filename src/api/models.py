@@ -54,6 +54,16 @@ class PRReviewComment(BaseModel):
     created_at: datetime | None = None
 
 
+class PRComment(BaseModel):
+    """Issue-level conversation comment on a PR."""
+
+    author: str
+    body: str
+    author_association: str = ""
+    is_bot: bool = False
+    created_at: datetime | None = None
+
+
 class PullRequest(BaseModel):
     """View model for PR display."""
 
@@ -77,3 +87,4 @@ class PullRequest(BaseModel):
     checks: list[CheckRun] = Field(default_factory=list)
     file_changes: list[PRFileChange] = Field(default_factory=list)
     review_comments: list[PRReviewComment] = Field(default_factory=list)
+    comments: list[PRComment] = Field(default_factory=list)

@@ -14,6 +14,7 @@ from github.PullRequest import PullRequest as PyGithubPullRequest
 from src.api.models import (
     CheckRun,
     CIStatus,
+    PRComment,
     PRFileChange,
     PRFileSummary,
     PRReviewComment,
@@ -56,6 +57,9 @@ class GitHubRepositoryGateway:
         owner, name = pr.repo.split("/", maxsplit=1)
         files_url = f"{self._rest_api_url}/repos/{owner}/{name}/pulls/{pr.number}/files"
         comments_url = f"{self._rest_api_url}/repos/{owner}/{name}/pulls/{pr.number}/comments"
+        issue_comments_url = (
+            f"{self._rest_api_url}/repos/{owner}/{name}/issues/{pr.number}/comments"
+        )
 
         async with aiohttp.ClientSession(headers=self._headers) as session:
             async with session.get(files_url, ssl=True, params={"per_page": 100}) as files_response:
@@ -66,6 +70,13 @@ class GitHubRepositoryGateway:
             ) as comments_response:
                 comments_response.raise_for_status()
                 comments_payload: list[dict[str, Any]] = await comments_response.json()
+            async with session.get(
+                issue_comments_url, ssl=True, params={"per_page": 100}
+            ) as issue_comments_response:
+                issue_comments_response.raise_for_status()
+                issue_comments_payload: list[dict[str, Any]] = (
+                    await issue_comments_response.json()
+                )
 
         pr.file_changes = [
             PRFileChange(
@@ -90,6 +101,20 @@ class GitHubRepositoryGateway:
                 ),
             )
             for item in comments_payload
+        ]
+        pr.comments = [
+            PRComment(
+                author=(item.get("user") or {}).get("login", "unknown"),
+                body=item.get("body", ""),
+                author_association=item.get("author_association", ""),
+                is_bot=(item.get("user") or {}).get("type", "") == "Bot",
+                created_at=(
+                    datetime.fromisoformat(item["created_at"].replace("Z", "+00:00"))
+                    if item.get("created_at")
+                    else None
+                ),
+            )
+            for item in issue_comments_payload
         ]
         return pr
 
@@ -179,7 +204,10 @@ class GitHubRepositoryGateway:
                 .get("commit", {})
             )
             rollup = commit_node.get("statusCheckRollup") or {}
-            ci_state = rollup.get("state", "UNKNOWN")
+            raw_state = rollup.get("state", "UNKNOWN")
+            # GitHub returns EXPECTED for pending checks and null rollup
+            # for newly pushed commits — normalise both to PENDING
+            ci_state = "PENDING" if raw_state in ("EXPECTED", "UNKNOWN") and rollup else raw_state
 
             checks: list[CheckRun] = []
             for ctx in (rollup.get("contexts", {}).get("nodes", []) or []):

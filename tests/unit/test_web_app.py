@@ -10,6 +10,7 @@ import pytest
 from src.api.models import (
     CheckRun,
     CIStatus,
+    PRComment,
     PRFileChange,
     PRFileSummary,
     PRReviewComment,
@@ -46,6 +47,20 @@ def _sample_pr() -> PullRequest:
         ],
         review_comments=[
             PRReviewComment(author="reviewer1", body="Looks good", path="src/main.py", line=10)
+        ],
+        comments=[
+            PRComment(
+                author="copilot[bot]",
+                body="Automated suggestion",
+                author_association="NONE",
+                is_bot=True,
+            ),
+            PRComment(
+                author="octocat",
+                body="Thanks!",
+                author_association="MEMBER",
+                is_bot=False,
+            ),
         ],
     )
 
@@ -101,6 +116,10 @@ def test_api_pr_detail(client):
     assert data["checks"][0]["name"] == "CI / checks"
     assert data["checks"][0]["conclusion"] == "SUCCESS"
     assert data["checks"][1]["conclusion"] == "FAILURE"
+    assert len(data["comments"]) == 2
+    assert data["comments"][0]["author"] == "copilot[bot]"
+    assert data["comments"][0]["is_bot"] is True
+    assert data["comments"][1]["author"] == "octocat"
     pr_service.get_pull_request_details.assert_called_once()
 
 
