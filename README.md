@@ -113,15 +113,19 @@ Set `GITHUB_TOKEN` in `.env`.
 
 For a **classic PAT**, use `repo` scope. Add `read:org` if your repositories are in an organisation with restricted visibility.
 
-For a **fine-grained PAT**, grant access to each target repository and set these permissions:
+For a **fine-grained PAT**, you must configure both repository access and individual permissions:
 
-| Permission | Access | Required for |
+1. **Repository access** — select "Only select repositories" and add every repo listed in your `config.yaml`. Alternatively choose "All repositories" if you want blanket access, but scoped access is recommended.
+
+2. **Repository permissions** — enable each of these:
+
+| Permission | Access level | Why it's needed |
 | --- | --- | --- |
-| Pull requests | **Read and write** | Approve, request changes, comment, close |
-| Contents | **Read and write** | Merge actions |
-| Metadata | **Read-only** | Automatically granted |
+| **Pull requests** | Read and write | List open PRs, submit reviews (approve / request changes), post comments, close PRs |
+| **Contents** | Read and write | Merge pull requests (merge, squash, rebase) |
+| **Metadata** | Read-only | Required for all API access (granted automatically when any other permission is enabled) |
 
-Use "Only select repositories" and include the repos listed in `config.yaml`.
+> **Note:** If you only need to _monitor_ PRs without taking actions, **Pull requests: Read-only** and **Metadata: Read-only** are sufficient. Merge and review actions require write access.
 
 ### GitHub App
 
