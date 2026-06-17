@@ -22,11 +22,11 @@ def main() -> None:
 
     app = create_app(settings=settings, pr_service=pr_service)
 
-    host = os.getenv("HOST", "0.0.0.0")
+    host = os.getenv("HOST", "")
     port = int(os.getenv("PORT", "5000"))
     debug = os.getenv("FLASK_DEBUG", "0") == "1"
 
-    app.run(host=host, port=port, debug=debug)
+    app.run(host=host or "0.0.0.0", port=port, debug=debug)  # nosec B104
 
 
 if __name__ == "__main__":

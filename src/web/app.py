@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import threading
 from datetime import datetime
 from typing import Any
@@ -20,7 +21,7 @@ def create_app(settings: AppSettings, pr_service: PRService) -> Flask:
         template_folder="templates",
         static_folder="static",
     )
-    app.config["SECRET_KEY"] = "github-pr-monitor-local"
+    app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", os.urandom(32).hex())
 
     # Shared state
     state: dict[str, Any] = {
