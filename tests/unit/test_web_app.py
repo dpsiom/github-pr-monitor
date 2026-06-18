@@ -69,31 +69,35 @@ def _sample_pr() -> PullRequest:
 def client():
     settings = AppSettings(config=AppConfig())
     pr_service = Mock()
+    auth_service = Mock()
+    auth_service.authenticate_browser_session = Mock(return_value="browser-token")
+    auth_service.validate_token_scopes = Mock()
     pr_service.subscribe_updates = Mock()
     pr_service.subscribe_error = Mock()
     pr_service.get_pull_request_details = Mock(return_value=_sample_pr())
     pr_service.run_action = Mock()
     pr_service.force_refresh = Mock()
+    pr_service.update_token = Mock()
 
-    app = create_app(settings=settings, pr_service=pr_service)
+    app = create_app(settings=settings, pr_service=pr_service, auth_service=auth_service)
     app.config["TESTING"] = True
 
     with app.test_client() as test_client:
         # Simulate PR data arrival
         update_callback = pr_service.subscribe_updates.call_args[0][0]
         update_callback([_sample_pr()], datetime(2024, 1, 15, 10, 30))
-        yield test_client, pr_service
+        yield test_client, pr_service, auth_service, settings
 
 
 def test_index_returns_html(client):
-    test_client, _ = client
+    test_client, _, _, _ = client
     response = test_client.get("/")
     assert response.status_code == 200
     assert b"PR Monitor" in response.data
 
 
 def test_api_prs_returns_pr_list(client):
-    test_client, _ = client
+    test_client, _, _, _ = client
     response = test_client.get("/api/prs")
     assert response.status_code == 200
     data = response.get_json()
@@ -104,7 +108,7 @@ def test_api_prs_returns_pr_list(client):
 
 
 def test_api_pr_detail(client):
-    test_client, pr_service = client
+    test_client, pr_service, _, _ = client
     response = test_client.get("/api/prs/octo/repo/1")
     assert response.status_code == 200
     data = response.get_json()
@@ -124,13 +128,13 @@ def test_api_pr_detail(client):
 
 
 def test_api_pr_detail_not_found(client):
-    test_client, _ = client
+    test_client, _, _, _ = client
     response = test_client.get("/api/prs/unknown/repo/999")
     assert response.status_code == 404
 
 
 def test_api_pr_action_approve(client):
-    test_client, pr_service = client
+    test_client, pr_service, _, _ = client
     response = test_client.post(
         "/api/prs/octo/repo/1/action",
         json={"action": "approve", "comment": "LGTM"},
@@ -145,13 +149,13 @@ def test_api_pr_action_approve(client):
 
 
 def test_api_pr_action_missing_action(client):
-    test_client, _ = client
+    test_client, _, _, _ = client
     response = test_client.post("/api/prs/octo/repo/1/action", json={})
     assert response.status_code == 400
 
 
 def test_api_pr_action_error(client):
-    test_client, pr_service = client
+    test_client, pr_service, _, _ = client
     pr_service.run_action.side_effect = RuntimeError("merge conflict")
     response = test_client.post(
         "/api/prs/octo/repo/1/action",
@@ -162,24 +166,69 @@ def test_api_pr_action_error(client):
 
 
 def test_api_refresh(client):
-    test_client, pr_service = client
+    test_client, pr_service, _, _ = client
     response = test_client.post("/api/refresh")
     assert response.status_code == 200
     assert response.get_json()["success"] is True
 
 
 def test_api_settings(client):
-    test_client, _ = client
+    test_client, _, _, _ = client
     response = test_client.get("/api/settings")
     assert response.status_code == 200
     data = response.get_json()
     assert "repositories" in data
     assert "poll_interval_seconds" in data
+    assert "browser_auth" in data
+
+
+def test_api_settings_save(client):
+    test_client, _, _, settings = client
+    response = test_client.post(
+        "/api/settings",
+        json={
+            "repositories": [{"name": "octo/repo", "enabled": True}],
+            "organization_monitoring": False,
+            "organization": None,
+            "monitor": {
+                "poll_interval_seconds": 60,
+                "realtime_mode": "polling",
+                "smee_url": None,
+                "webhook_host": "127.0.0.1",
+                "webhook_port": 8765,
+                "webhook_secret": None,
+            },
+            "auth_mode": "browser",
+            "github_app": {
+                "enabled": False,
+                "app_id": None,
+                "installation_id": None,
+                "private_key_path": None,
+            },
+            "browser_auth": {
+                "enabled": True,
+                "client_id": "Iv1.example",
+                "scopes": "repo read:org",
+            },
+        },
+    )
+    assert response.status_code == 200
+    assert settings.config.auth_mode == "browser"
+    assert settings.config.browser_auth.client_id == "Iv1.example"
+
+
+def test_api_auth_browser_start(client):
+    test_client, pr_service, auth_service, _ = client
+    response = test_client.post("/api/auth/browser/start")
+    assert response.status_code == 200
+    auth_service.authenticate_browser_session.assert_called_once_with(open_browser=True)
+    auth_service.validate_token_scopes.assert_called_once_with("browser-token")
+    pr_service.update_token.assert_called_once_with("browser-token")
 
 
 def test_no_ansi_in_patch_response(client):
     """Ensure patch data doesn't contain ANSI escape sequences."""
-    test_client, _ = client
+    test_client, _, _, _ = client
     response = test_client.get("/api/prs/octo/repo/1")
     data = response.get_json()
     for fc in data["file_changes"]:

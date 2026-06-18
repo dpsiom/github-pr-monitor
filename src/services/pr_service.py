@@ -40,6 +40,10 @@ class PRService:
         """Subscribe to polling errors."""
         self.notification_service.subscribe("polling_error", lambda _n, payload: callback(payload))
 
+    def update_token(self, token: str) -> None:
+        """Replace gateway token after re-authentication."""
+        self.gateway.token = token
+
     def start(self) -> None:
         """Start polling in a dedicated daemon thread."""
         if self._thread and self._thread.is_alive():

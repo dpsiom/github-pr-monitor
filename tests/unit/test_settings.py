@@ -42,3 +42,22 @@ def test_settings_parses_github_app_private_key_path(tmp_path: Path) -> None:
     loaded = AppSettings._load_yaml_config(config_file)
     assert loaded.auth_mode == "github_app"
     assert loaded.github_app.private_key_path == key_path
+
+
+def test_settings_parses_browser_auth(tmp_path: Path) -> None:
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        (
+            "auth_mode: browser\n"
+            "browser_auth:\n"
+            "  enabled: true\n"
+            "  client_id: 'Iv1.browser'\n"
+            "  scopes: 'repo read:org'\n"
+        ),
+        encoding="utf-8",
+    )
+
+    loaded = AppSettings._load_yaml_config(config_file)
+    assert loaded.auth_mode == "browser"
+    assert loaded.browser_auth.enabled is True
+    assert loaded.browser_auth.client_id == "Iv1.browser"

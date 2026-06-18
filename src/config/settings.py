@@ -54,6 +54,14 @@ class GitHubAppConfig(BaseModel):
         return Path(value)
 
 
+class BrowserAuthConfig(BaseModel):
+    """Browser-based OAuth authentication settings."""
+
+    enabled: bool = False
+    client_id: str | None = None
+    scopes: str = "repo read:org"
+
+
 class AppConfig(BaseModel):
     """Config loaded from YAML."""
 
@@ -61,8 +69,9 @@ class AppConfig(BaseModel):
     organization_monitoring: bool = False
     organization: str | None = None
     monitor: MonitorConfig = Field(default_factory=MonitorConfig)
-    auth_mode: Literal["pat", "github_app"] = "pat"
+    auth_mode: Literal["pat", "github_app", "browser"] = "pat"
     github_app: GitHubAppConfig = Field(default_factory=GitHubAppConfig)
+    browser_auth: BrowserAuthConfig = Field(default_factory=BrowserAuthConfig)
 
 
 class AppSettings(BaseModel):

@@ -44,6 +44,12 @@
             </div>
             <div class="flex items-center gap-4">
                 <span id="status" class="text-xs text-gray-400"></span>
+                <button onclick="openSettings()" class="p-1.5 rounded-md hover:bg-surface-hover border border-transparent hover:border-border transition-colors" title="Settings" aria-label="Settings">
+                    <svg class="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                </button>
                 <button onclick="refresh()" class="px-3 py-1.5 text-xs font-medium rounded-md bg-surface hover:bg-surface-hover border border-border transition-colors">
                     Refresh
                 </button>
@@ -78,9 +84,156 @@
         </div>
     </div>
 
+    <div id="settings-modal" class="hidden fixed inset-0 z-50">
+        <div class="absolute inset-0 bg-black/60" onclick="closeSettings()"></div>
+        <div class="relative max-w-2xl mx-auto mt-10 mx-4 rounded-xl border border-border bg-surface-card shadow-2xl">
+            <div class="flex items-center justify-between px-5 py-4 border-b border-border">
+                <h2 class="text-base font-semibold text-white">Settings</h2>
+                <button onclick="closeSettings()" class="text-gray-400 hover:text-white">✕</button>
+            </div>
+
+            <div class="px-5 py-4 space-y-4 max-h-[75vh] overflow-y-auto scrollbar-thin">
+                <div>
+                    <label class="block text-xs text-gray-400 mb-1">Authentication type</label>
+                    <select id="settings-auth-mode" onchange="onAuthModeChanged()" class="w-full px-3 py-2 rounded-lg bg-surface border border-border text-sm text-gray-200 focus:outline-none focus:border-accent/50">
+                        <option value="pat">Personal Access Token</option>
+                        <option value="github_app">GitHub App</option>
+                        <option value="browser">Browser Sign-in (OAuth)</option>
+                    </select>
+                </div>
+
+                <div id="settings-github-app" class="space-y-3 hidden">
+                    <p class="text-xs text-gray-400">Required when authentication type is GitHub App.</p>
+                    <div>
+                        <label class="block text-xs text-gray-400 mb-1">App ID</label>
+                        <input id="settings-app-id" type="text" class="w-full px-3 py-2 rounded-lg bg-surface border border-border text-sm text-gray-200" />
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-400 mb-1">Installation ID</label>
+                        <input id="settings-installation-id" type="text" class="w-full px-3 py-2 rounded-lg bg-surface border border-border text-sm text-gray-200" />
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-400 mb-1">Private key path</label>
+                        <input id="settings-private-key-path" type="text" class="w-full px-3 py-2 rounded-lg bg-surface border border-border text-sm text-gray-200" />
+                    </div>
+                </div>
+
+                <div id="settings-browser-auth" class="space-y-3 hidden">
+                    <p class="text-xs text-gray-400">Uses GitHub browser login. If your organization federates to Okta, GitHub will redirect there automatically.</p>
+                    <div>
+                        <label class="block text-xs text-gray-400 mb-1">OAuth app client ID</label>
+                        <input id="settings-browser-client-id" type="text" placeholder="Iv1..." class="w-full px-3 py-2 rounded-lg bg-surface border border-border text-sm text-gray-200" />
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-400 mb-1">Scopes</label>
+                        <input id="settings-browser-scopes" type="text" class="w-full px-3 py-2 rounded-lg bg-surface border border-border text-sm text-gray-200" />
+                    </div>
+                    <button onclick="startBrowserAuth()" class="px-3 py-2 rounded-md text-xs font-medium bg-accent/20 text-accent hover:bg-accent/30 border border-accent/40 transition-colors">
+                        Authenticate In Browser
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 px-5 py-4 border-t border-border">
+                <button onclick="closeSettings()" class="px-3 py-2 rounded-md text-xs font-medium bg-surface border border-border text-gray-300 hover:bg-surface-hover">Cancel</button>
+                <button onclick="saveSettings()" class="px-3 py-2 rounded-md text-xs font-medium bg-accent-green/20 text-accent-green hover:bg-accent-green/30 border border-accent-green/40">Save settings</button>
+            </div>
+        </div>
+    </div>
+
     <script>
     let selectedPR = null;
     let pollInterval = null;
+    let appSettings = null;
+
+    async function loadSettings() {
+        const res = await fetch('/api/settings');
+        const data = await res.json();
+        appSettings = data;
+
+        document.getElementById('settings-auth-mode').value = data.auth_mode || 'pat';
+        document.getElementById('settings-app-id').value = data.github_app?.app_id || '';
+        document.getElementById('settings-installation-id').value = data.github_app?.installation_id || '';
+        document.getElementById('settings-private-key-path').value = data.github_app?.private_key_path || '';
+        document.getElementById('settings-browser-client-id').value = data.browser_auth?.client_id || '';
+        document.getElementById('settings-browser-scopes').value = data.browser_auth?.scopes || 'repo read:org';
+
+        onAuthModeChanged();
+    }
+
+    function openSettings() {
+        if (!appSettings) {
+            loadSettings().catch(e => showToast(e.message, 'error'));
+        }
+        document.getElementById('settings-modal').classList.remove('hidden');
+    }
+
+    function closeSettings() {
+        document.getElementById('settings-modal').classList.add('hidden');
+    }
+
+    function onAuthModeChanged() {
+        const mode = document.getElementById('settings-auth-mode').value;
+        document.getElementById('settings-github-app').classList.toggle('hidden', mode !== 'github_app');
+        document.getElementById('settings-browser-auth').classList.toggle('hidden', mode !== 'browser');
+    }
+
+    async function saveSettings() {
+        try {
+            const authMode = document.getElementById('settings-auth-mode').value;
+            const payload = {
+                repositories: appSettings?.repositories || [],
+                organization_monitoring: appSettings?.organization_monitoring || false,
+                organization: appSettings?.organization || null,
+                monitor: appSettings?.monitor || {
+                    poll_interval_seconds: appSettings?.poll_interval_seconds || 60,
+                    realtime_mode: appSettings?.realtime_mode || 'polling',
+                    smee_url: null,
+                    webhook_host: '127.0.0.1',
+                    webhook_port: 8765,
+                    webhook_secret: null,
+                },
+                auth_mode: authMode,
+                github_app: {
+                    enabled: authMode === 'github_app',
+                    app_id: document.getElementById('settings-app-id').value || null,
+                    installation_id: document.getElementById('settings-installation-id').value || null,
+                    private_key_path: document.getElementById('settings-private-key-path').value || null,
+                },
+                browser_auth: {
+                    enabled: authMode === 'browser',
+                    client_id: document.getElementById('settings-browser-client-id').value || null,
+                    scopes: document.getElementById('settings-browser-scopes').value || 'repo read:org',
+                },
+            };
+
+            const res = await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+
+            appSettings = payload;
+            showToast('Settings saved', 'success');
+            closeSettings();
+        } catch (e) {
+            showToast(e.message, 'error');
+        }
+    }
+
+    async function startBrowserAuth() {
+        try {
+            const res = await fetch('/api/auth/browser/start', { method: 'POST' });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            showToast(data.message || 'Browser auth completed', 'success');
+            fetchPRs();
+        } catch (e) {
+            showToast(e.message, 'error');
+        }
+    }
 
     async function fetchPRs() {
         try {
@@ -416,6 +569,7 @@
     }
 
     // Start polling
+    loadSettings().catch(() => null);
     fetchPRs();
     pollInterval = setInterval(fetchPRs, 10000);
     </script>

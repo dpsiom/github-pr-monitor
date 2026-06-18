@@ -10,11 +10,12 @@ from typing import Any
 from flask import Flask, jsonify, render_template, request
 
 from src.api.models import PullRequest
-from src.config.settings import AppSettings
+from src.config.settings import AppConfig, AppSettings
+from src.services.auth_service import AuthService
 from src.services.pr_service import PRService
 
 
-def create_app(settings: AppSettings, pr_service: PRService) -> Flask:
+def create_app(settings: AppSettings, pr_service: PRService, auth_service: AuthService) -> Flask:
     """Create and configure the Flask application."""
     app = Flask(
         __name__,
@@ -30,6 +31,8 @@ def create_app(settings: AppSettings, pr_service: PRService) -> Flask:
         "error": None,
         "status": "Starting...",
     }
+    if settings.config.auth_mode == "browser" and not pr_service.gateway.token:
+        state["status"] = "Authentication required | Open Settings to sign in"
 
     def on_prs_updated(prs: list[PullRequest], ts: datetime) -> None:
         state["prs"] = prs
@@ -121,9 +124,63 @@ def create_app(settings: AppSettings, pr_service: PRService) -> Flask:
                 ],
                 "poll_interval_seconds": config.monitor.poll_interval_seconds,
                 "realtime_mode": config.monitor.realtime_mode,
+                "organization_monitoring": config.organization_monitoring,
+                "organization": config.organization,
+                "monitor": {
+                    "poll_interval_seconds": config.monitor.poll_interval_seconds,
+                    "realtime_mode": config.monitor.realtime_mode,
+                    "smee_url": config.monitor.smee_url,
+                    "webhook_host": config.monitor.webhook_host,
+                    "webhook_port": config.monitor.webhook_port,
+                    "webhook_secret": config.monitor.webhook_secret,
+                },
                 "auth_mode": config.auth_mode,
+                "github_app": {
+                    "enabled": config.github_app.enabled,
+                    "app_id": config.github_app.app_id,
+                    "installation_id": config.github_app.installation_id,
+                    "private_key_path": (
+                        str(config.github_app.private_key_path)
+                        if config.github_app.private_key_path
+                        else None
+                    ),
+                },
+                "browser_auth": {
+                    "enabled": config.browser_auth.enabled,
+                    "client_id": config.browser_auth.client_id,
+                    "scopes": config.browser_auth.scopes,
+                },
             }
         )
+
+    @app.route("/api/settings", methods=["POST"])
+    def api_save_settings() -> Any:
+        payload = request.get_json(force=True)
+        try:
+            updated = AppConfig.model_validate(payload)
+        except Exception as exc:  # noqa: BLE001
+            return jsonify({"error": f"Invalid settings payload: {exc}"}), 400
+
+        settings.config = updated
+        settings.save_config()
+        return jsonify({"success": True, "message": "Settings saved"})
+
+    @app.route("/api/auth/browser/start", methods=["POST"])
+    def api_auth_browser_start() -> Any:
+        try:
+            token = auth_service.authenticate_browser_session(open_browser=True)
+            auth_service.validate_token_scopes(token)
+            pr_service.update_token(token)
+            pr_service.start()
+            threading.Thread(target=pr_service.force_refresh, daemon=True).start()
+            return jsonify(
+                {
+                    "success": True,
+                    "message": "Browser authentication completed and session updated",
+                }
+            )
+        except Exception as exc:  # noqa: BLE001
+            return jsonify({"error": str(exc)}), 400
 
     return app
 

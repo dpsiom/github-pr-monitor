@@ -143,3 +143,62 @@ def test_github_app_token_missing_token_field(
 
     with pytest.raises(PermissionError):
         auth.get_or_request_token()
+
+
+@patch("src.services.auth_service.get_token_from_keychain", return_value=None)
+def test_browser_mode_requires_cached_token(
+    mock_keychain: Mock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    settings = AppSettings(
+        config=AppConfig(
+            auth_mode="browser",
+            browser_auth={"enabled": True, "client_id": "Iv1.client", "scopes": "repo"},
+        )
+    )
+    auth = AuthService(settings)
+
+    with pytest.raises(ValueError, match="Browser auth token not found"):
+        auth.get_or_request_token()
+
+    mock_keychain.assert_called_once()
+
+
+@patch("src.services.auth_service.save_token_to_keychain")
+@patch("src.services.auth_service.webbrowser.open")
+@patch("src.services.auth_service.requests.post")
+def test_browser_authenticate_device_flow_success(
+    mock_post: Mock,
+    mock_browser_open: Mock,
+    mock_save_token: Mock,
+) -> None:
+    start_response = Mock()
+    start_response.raise_for_status = Mock()
+    start_response.json.return_value = {
+        "device_code": "dev-code",
+        "verification_uri_complete": "https://github.com/login/device",
+        "interval": 1,
+        "expires_in": 600,
+    }
+    token_response = Mock()
+    token_response.raise_for_status = Mock()
+    token_response.json.return_value = {"access_token": "oauth-token"}
+    mock_post.side_effect = [start_response, token_response]
+
+    settings = AppSettings(
+        config=AppConfig(
+            auth_mode="browser",
+            browser_auth={"enabled": True, "client_id": "Iv1.client", "scopes": "repo read:org"},
+        )
+    )
+    auth = AuthService(settings)
+
+    token = auth.authenticate_browser_session(open_browser=True)
+
+    assert token == "oauth-token"
+    mock_browser_open.assert_called_once_with("https://github.com/login/device")
+    mock_save_token.assert_called_once_with(
+        service_name=settings.keychain_service,
+        username=settings.keychain_username,
+        token="oauth-token",
+    )
