@@ -70,7 +70,16 @@ def client():
     settings = AppSettings(config=AppConfig())
     pr_service = Mock()
     auth_service = Mock()
-    auth_service.authenticate_browser_session = Mock(return_value="browser-token")
+    auth_service.begin_browser_device_flow = Mock(
+        return_value={
+            "device_code": "dev-code",
+            "user_code": "1234-ABCD",
+            "verification_url": "https://github.com/login/device",
+            "interval": 5,
+            "expires_in": 900,
+        }
+    )
+    auth_service.complete_browser_device_flow = Mock(return_value="browser-token")
     auth_service.validate_token_scopes = Mock()
     pr_service.subscribe_updates = Mock()
     pr_service.subscribe_error = Mock()
@@ -217,9 +226,30 @@ def test_api_auth_browser_start(client):
     test_client, pr_service, auth_service, _ = client
     response = test_client.post("/api/auth/browser/start")
     assert response.status_code == 200
-    auth_service.authenticate_browser_session.assert_called_once_with(open_browser=True)
+    data = response.get_json()
+    assert data["verification_url"] == "https://github.com/login/device"
+    assert data["user_code"] == "1234-ABCD"
+    auth_service.begin_browser_device_flow.assert_called_once()
+    auth_service.validate_token_scopes.assert_not_called()
+    pr_service.update_token.assert_not_called()
+
+
+def test_api_auth_browser_poll_completed(client):
+    test_client, pr_service, auth_service, _ = client
+    _ = test_client.post("/api/auth/browser/start")
+    response = test_client.post("/api/auth/browser/poll")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["completed"] is True
+    auth_service.complete_browser_device_flow.assert_called_once()
     auth_service.validate_token_scopes.assert_called_once_with("browser-token")
     pr_service.update_token.assert_called_once_with("browser-token")
+
+
+def test_api_auth_browser_poll_without_session(client):
+    test_client, _, _, _ = client
+    response = test_client.post("/api/auth/browser/poll")
+    assert response.status_code == 400
 
 
 @patch("src.web.app.save_token_to_keychain")

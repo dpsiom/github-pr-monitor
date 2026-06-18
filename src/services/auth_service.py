@@ -52,8 +52,8 @@ class AuthService:
             "or store it in the OS keychain."
         )
 
-    def authenticate_browser_session(self, open_browser: bool = True) -> str:
-        """Run OAuth device flow and store resulting token in keychain."""
+    def begin_browser_device_flow(self) -> dict[str, str | int]:
+        """Request a device-flow code and verification URL from GitHub."""
         browser = self.settings.config.browser_auth
         if self.settings.config.auth_mode != "browser":
             raise ValueError("auth_mode must be set to browser to use browser auth")
@@ -77,6 +77,7 @@ class AuthService:
         code_response.raise_for_status()
         code_payload = code_response.json()
         device_code = code_payload.get("device_code")
+        user_code = code_payload.get("user_code")
         interval = code_payload.get("interval", 5)
         expires_in = code_payload.get("expires_in", 900)
         verification_url = code_payload.get("verification_uri_complete") or code_payload.get(
@@ -85,10 +86,39 @@ class AuthService:
 
         if not isinstance(device_code, str) or not device_code:
             raise PermissionError("Failed to start browser authentication")
+        if not isinstance(user_code, str) or not user_code:
+            raise PermissionError("Missing user code for browser authentication")
         if not isinstance(verification_url, str) or not verification_url:
             raise PermissionError("Missing verification URL for browser authentication")
 
-        if open_browser:
+        return {
+            "device_code": device_code,
+            "user_code": user_code,
+            "verification_url": verification_url,
+            "interval": int(interval),
+            "expires_in": int(expires_in),
+        }
+
+    def complete_browser_device_flow(
+        self,
+        *,
+        device_code: str,
+        interval: int,
+        expires_in: int,
+        open_browser: bool = True,
+        verification_url: str | None = None,
+        single_check: bool = False,
+    ) -> str:
+        """Poll device-flow token endpoint until an access token is returned."""
+        browser = self.settings.config.browser_auth
+        if self.settings.config.auth_mode != "browser":
+            raise ValueError("auth_mode must be set to browser to use browser auth")
+        if not browser.enabled:
+            raise ValueError("browser_auth.enabled must be true when auth_mode=browser")
+        if not browser.client_id:
+            raise ValueError("browser_auth.client_id is required")
+
+        if open_browser and verification_url:
             webbrowser.open(verification_url)
 
         deadline = time.time() + int(expires_in)
@@ -122,9 +152,13 @@ class AuthService:
 
             error_code = token_payload.get("error")
             if error_code == "authorization_pending":
+                if single_check:
+                    raise PermissionError("Browser authentication pending")
                 time.sleep(poll_interval)
                 continue
             if error_code == "slow_down":
+                if single_check:
+                    raise PermissionError("Browser authentication pending")
                 poll_interval += 5
                 time.sleep(poll_interval)
                 continue
@@ -136,6 +170,17 @@ class AuthService:
             raise PermissionError("Browser authentication failed")
 
         raise PermissionError("Browser authentication timed out")
+
+    def authenticate_browser_session(self, open_browser: bool = True) -> str:
+        """Run OAuth device flow and store resulting token in keychain."""
+        flow = self.begin_browser_device_flow()
+        return self.complete_browser_device_flow(
+            device_code=str(flow["device_code"]),
+            interval=int(flow["interval"]),
+            expires_in=int(flow["expires_in"]),
+            open_browser=open_browser,
+            verification_url=str(flow["verification_url"]),
+        )
 
     def _get_github_app_token(self) -> str:
         """Create and exchange a GitHub App JWT for an installation token."""
