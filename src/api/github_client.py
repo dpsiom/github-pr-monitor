@@ -189,20 +189,22 @@ class GitHubRepositoryGateway:
             response.raise_for_status()
             body: dict[str, Any] = await response.json()
 
-        nodes = body.get("data", {}).get("repository", {}).get("pullRequests", {}).get("nodes", [])
+        nodes = (
+            (body.get("data") or {})
+            .get("repository") or {}
+        ).get("pullRequests", {}).get("nodes", [])
         parsed: list[PullRequest] = []
         for node in nodes:
             reviewers = [
                 req["requestedReviewer"]["login"]
-                for req in node.get("reviewRequests", {}).get("nodes", [])
+                for req in (node.get("reviewRequests") or {}).get("nodes") or []
                 if req.get("requestedReviewer") and req["requestedReviewer"].get("login")
             ]
-            file_node = (node.get("files", {}).get("nodes", []) or [{}])[0]
-            commit_node = (
-                node.get("commits", {})
-                .get("nodes", [{}])[0]
-                .get("commit", {})
+            file_node = ((node.get("files") or {}).get("nodes") or [{}])[0]
+            commit_nodes = (
+                (node.get("commits") or {}).get("nodes") or [{}]
             )
+            commit_node = (commit_nodes[0] if commit_nodes else {}).get("commit") or {}
             rollup = commit_node.get("statusCheckRollup") or {}
             raw_state = rollup.get("state", "UNKNOWN")
             # GitHub returns EXPECTED for pending checks and null rollup
@@ -210,7 +212,8 @@ class GitHubRepositoryGateway:
             ci_state = "PENDING" if raw_state in ("EXPECTED", "UNKNOWN") and rollup else raw_state
 
             checks: list[CheckRun] = []
-            for ctx in (rollup.get("contexts", {}).get("nodes", []) or []):
+            contexts_nodes = (rollup.get("contexts") or {}).get("nodes") or []
+            for ctx in contexts_nodes:
                 typename = ctx.get("__typename", "")
                 if typename == "CheckRun":
                     checks.append(CheckRun(
@@ -238,16 +241,19 @@ class GitHubRepositoryGateway:
                     is_draft=node.get("isDraft", False),
                     base_branch=node.get("baseRefName", ""),
                     head_branch=node.get("headRefName", ""),
-                    labels=[label["name"] for label in node.get("labels", {}).get("nodes", [])],
+                    labels=[
+                        label["name"]
+                        for label in (node.get("labels") or {}).get("nodes") or []
+                    ],
                     milestone=(node.get("milestone") or {}).get("title"),
                     reviewers=reviewers,
-                    review_comments_count=node.get("reviewThreads", {}).get("totalCount", 0),
+                    review_comments_count=(node.get("reviewThreads") or {}).get("totalCount", 0),
                     html_url=node.get("url", ""),
                     updated_at=datetime.fromisoformat(node["updatedAt"].replace("Z", "+00:00")),
                     files=PRFileSummary(
                         additions=file_node.get("additions", 0),
                         deletions=file_node.get("deletions", 0),
-                        changed_files=node.get("files", {}).get("totalCount", 0),
+                        changed_files=(node.get("files") or {}).get("totalCount", 0),
                     ),
                     ci_status=CIStatus(state=ci_state),
                     checks=checks,
