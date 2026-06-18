@@ -15,15 +15,13 @@ def main() -> None:
     settings = AppSettings.load()
     auth_service = AuthService(settings)
     token: str | None = None
-    if settings.config.auth_mode == "browser":
-        try:
-            token = auth_service.get_or_request_token()
-            auth_service.validate_token_scopes(token)
-        except ValueError:
-            token = None
-    else:
+    try:
         token = auth_service.get_or_request_token()
         auth_service.validate_token_scopes(token)
+    except (PermissionError, ValueError):
+        # Start the UI even when auth is not configured yet. The user can
+        # complete authentication from the Settings panel.
+        token = None
 
     pr_service = PRService(settings=settings, token=token)
     if token:

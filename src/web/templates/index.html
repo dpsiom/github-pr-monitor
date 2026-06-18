@@ -102,6 +102,17 @@
                     </select>
                 </div>
 
+                <div id="settings-pat" class="space-y-3 hidden">
+                    <p class="text-xs text-gray-400">Use a Personal Access Token to authenticate this running session.</p>
+                    <div>
+                        <label class="block text-xs text-gray-400 mb-1">PAT token</label>
+                        <input id="settings-pat-token" type="password" placeholder="ghp_..." class="w-full px-3 py-2 rounded-lg bg-surface border border-border text-sm text-gray-200" />
+                    </div>
+                    <button onclick="startPatAuth()" class="px-3 py-2 rounded-md text-xs font-medium bg-accent/20 text-accent hover:bg-accent/30 border border-accent/40 transition-colors">
+                        Use PAT For This Session
+                    </button>
+                </div>
+
                 <div id="settings-github-app" class="space-y-3 hidden">
                     <p class="text-xs text-gray-400">Required when authentication type is GitHub App.</p>
                     <div>
@@ -146,9 +157,23 @@
     let pollInterval = null;
     let appSettings = null;
 
+    async function parseApiResponse(res) {
+        const text = await res.text();
+        let data = null;
+        try {
+            data = text ? JSON.parse(text) : {};
+        } catch {
+            throw new Error(`Request failed (${res.status})`);
+        }
+        if (!res.ok) {
+            throw new Error(data?.error || `Request failed (${res.status})`);
+        }
+        return data;
+    }
+
     async function loadSettings() {
         const res = await fetch('/api/settings');
-        const data = await res.json();
+        const data = await parseApiResponse(res);
         appSettings = data;
 
         document.getElementById('settings-auth-mode').value = data.auth_mode || 'pat';
@@ -174,6 +199,7 @@
 
     function onAuthModeChanged() {
         const mode = document.getElementById('settings-auth-mode').value;
+        document.getElementById('settings-pat').classList.toggle('hidden', mode !== 'pat');
         document.getElementById('settings-github-app').classList.toggle('hidden', mode !== 'github_app');
         document.getElementById('settings-browser-auth').classList.toggle('hidden', mode !== 'browser');
     }
@@ -201,11 +227,10 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
             });
-            const data = await res.json();
-            if (data.error) throw new Error(data.error);
+            const data = await parseApiResponse(res);
 
             appSettings = payload;
-            showToast('Settings saved', 'success');
+            showToast(data.message || 'Settings saved', 'success');
             closeSettings();
         } catch (e) {
             showToast(e.message, 'error');
@@ -214,10 +239,33 @@
 
     async function startBrowserAuth() {
         try {
+            const mode = document.getElementById('settings-auth-mode').value;
+            if (mode !== 'browser') {
+                throw new Error('Select Browser Sign-in in Authentication type first');
+            }
             const res = await fetch('/api/auth/browser/start', { method: 'POST' });
-            const data = await res.json();
-            if (data.error) throw new Error(data.error);
+            const data = await parseApiResponse(res);
             showToast(data.message || 'Browser auth completed', 'success');
+            fetchPRs();
+        } catch (e) {
+            showToast(e.message, 'error');
+        }
+    }
+
+    async function startPatAuth() {
+        try {
+            const token = document.getElementById('settings-pat-token').value.trim();
+            if (!token) {
+                throw new Error('Enter a PAT token first');
+            }
+            const res = await fetch('/api/auth/pat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token }),
+            });
+            const data = await parseApiResponse(res);
+            showToast(data.message || 'PAT authentication completed', 'success');
+            document.getElementById('settings-pat-token').value = '';
             fetchPRs();
         } catch (e) {
             showToast(e.message, 'error');
@@ -227,7 +275,7 @@
     async function fetchPRs() {
         try {
             const res = await fetch('/api/prs');
-            const data = await res.json();
+            const data = await parseApiResponse(res);
             renderPRList(data.prs);
             document.getElementById('status').textContent = data.status || '';
         } catch (e) {
@@ -282,8 +330,7 @@
 
         try {
             const res = await fetch(`/api/prs/${repo}/${number}`);
-            const pr = await res.json();
-            if (pr.error) throw new Error(pr.error);
+            const pr = await parseApiResponse(res);
             selectedPR = pr;
             renderDetail(pr);
             fetchPRs(); // re-render list to highlight selection
@@ -468,8 +515,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action, comment: comment || null, merge_method: mergeMethod }),
             });
-            const data = await res.json();
-            if (data.error) throw new Error(data.error);
+            const data = await parseApiResponse(res);
             showToast(data.message, 'success');
             // Reload detail after action
             setTimeout(() => selectPR(selectedPR.repo, selectedPR.number), 1500);
