@@ -123,11 +123,12 @@ For a **fine-grained PAT**, you must configure both repository access and indivi
 | --- | --- | --- |
 | **Pull requests** | Read and write | List open PRs, submit reviews (approve / request changes), post comments, close PRs |
 | **Contents** | Read and write | Merge pull requests (merge, squash, rebase) |
-| **Checks** | Read-only | View check runs and CI status for each PR |
-| **Commit statuses** | Read-only | View commit status (CI pass/fail) for each PR |
+| **Commit statuses** | Read-only | View legacy commit status (CI pass/fail) for each PR |
 | **Metadata** | Read-only | Required for all API access (granted automatically when any other permission is enabled) |
 
-> **Note:** If you only need to _monitor_ PRs without taking actions, **Pull requests: Read-only**, **Checks: Read-only**, **Commit statuses: Read-only**, and **Metadata: Read-only** are sufficient. Merge and review actions require write access.
+> **Note:** If you only need to _monitor_ PRs without taking actions, **Pull requests: Read-only**, **Commit statuses: Read-only**, and **Metadata: Read-only** are sufficient. Merge and review actions require write access.
+
+> **⚠️ CI status on private repos:** Fine-grained PATs cannot access GitHub's Checks API (a [documented limitation](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#fine-grained-personal-access-tokens-limitations)). If your private repo uses GitHub Actions for CI, the check run status will show as **UNKNOWN** regardless of the permissions you grant. To see CI status on private repos, use a **classic PAT** with `repo` scope, or switch to a **GitHub App** (see below).
 
 ### GitHub App
 
@@ -182,6 +183,7 @@ The web UI will be available at **http://localhost:5000**.
 | `GITHUB_TOKEN` invalid | Ensure token has `repo` scope (classic) or correct fine-grained permissions and hasn't expired |
 | Port 5000 in use | Use `-p 5001:5000` and open `http://localhost:5001` |
 | Rate limit errors | Increase `monitor.poll_interval_seconds` (minimum 30) |
+| CI status shows **UNKNOWN** on private repos | Fine-grained PATs cannot access the Checks API — switch to a classic PAT with `repo` scope or a GitHub App |
 
 ---
 
