@@ -32,6 +32,7 @@ def create_app(settings: AppSettings, pr_service: PRService, auth_service: AuthS
         "error": None,
         "status": "Starting...",
     }
+    auth_flow_state: dict[str, Any] = {}
     if not pr_service.gateway.token:
         state["status"] = "Authentication required — open Settings ⚙ to sign in"
 
@@ -201,19 +202,63 @@ def create_app(settings: AppSettings, pr_service: PRService, auth_service: AuthS
     @app.route("/api/auth/browser/start", methods=["POST"])
     def api_auth_browser_start() -> Any:
         try:
-            token = auth_service.authenticate_browser_session(open_browser=True)
-            auth_service.validate_token_scopes(token)
-            pr_service.update_token(token)
-            pr_service.start()
-            threading.Thread(target=pr_service.force_refresh, daemon=True).start()
+            flow = auth_service.begin_browser_device_flow()
+            auth_flow_state["device_code"] = flow["device_code"]
+            auth_flow_state["interval"] = flow["interval"]
+            auth_flow_state["expires_in"] = flow["expires_in"]
+            auth_flow_state["started_at"] = datetime.now().timestamp()
             return jsonify(
                 {
                     "success": True,
-                    "message": "Browser authentication completed and session updated",
+                    "message": "Open the browser URL and complete GitHub sign-in",
+                    "verification_url": flow["verification_url"],
+                    "user_code": flow["user_code"],
+                    "interval": flow["interval"],
                 }
             )
         except Exception as exc:  # noqa: BLE001
             return jsonify({"error": str(exc)}), 400
+
+    @app.route("/api/auth/browser/poll", methods=["POST"])
+    def api_auth_browser_poll() -> Any:
+        device_code = auth_flow_state.get("device_code")
+        interval = auth_flow_state.get("interval")
+        expires_in = auth_flow_state.get("expires_in")
+        started_at = auth_flow_state.get("started_at")
+        if not device_code or interval is None or expires_in is None or started_at is None:
+            return jsonify({"error": "No active browser authentication session"}), 400
+
+        elapsed = datetime.now().timestamp() - float(started_at)
+        remaining = int(expires_in) - int(elapsed)
+        if remaining <= 0:
+            auth_flow_state.clear()
+            return jsonify({"error": "Browser authentication session expired"}), 400
+
+        try:
+            token = auth_service.complete_browser_device_flow(
+                device_code=str(device_code),
+                interval=1,
+                expires_in=1,
+                open_browser=False,
+                single_check=True,
+            )
+            auth_service.validate_token_scopes(token)
+            pr_service.update_token(token)
+            pr_service.start()
+            threading.Thread(target=pr_service.force_refresh, daemon=True).start()
+            auth_flow_state.clear()
+            return jsonify(
+                {
+                    "success": True,
+                    "completed": True,
+                    "message": "Browser authentication completed and session updated",
+                }
+            )
+        except PermissionError as exc:
+            message = str(exc)
+            if "pending" in message.lower() or "timed out" in message.lower():
+                return jsonify({"success": True, "completed": False, "pending": True})
+            return jsonify({"error": message}), 400
 
     return app
 

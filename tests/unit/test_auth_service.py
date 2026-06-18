@@ -176,6 +176,7 @@ def test_browser_authenticate_device_flow_success(
     start_response.raise_for_status = Mock()
     start_response.json.return_value = {
         "device_code": "dev-code",
+        "user_code": "1234-ABCD",
         "verification_uri_complete": "https://github.com/login/device",
         "interval": 1,
         "expires_in": 600,
@@ -202,3 +203,56 @@ def test_browser_authenticate_device_flow_success(
         username=settings.keychain_username,
         token="oauth-token",
     )
+
+
+@patch("src.services.auth_service.requests.post")
+def test_begin_browser_device_flow_returns_verification_data(mock_post: Mock) -> None:
+    response = Mock()
+    response.raise_for_status = Mock()
+    response.json.return_value = {
+        "device_code": "dev-code",
+        "user_code": "1234-ABCD",
+        "verification_uri_complete": "https://github.com/login/device",
+        "interval": 5,
+        "expires_in": 900,
+    }
+    mock_post.return_value = response
+
+    settings = AppSettings(
+        config=AppConfig(
+            auth_mode="browser",
+            browser_auth={"enabled": True, "client_id": "Iv1.client", "scopes": "repo"},
+        )
+    )
+    auth = AuthService(settings)
+
+    flow = auth.begin_browser_device_flow()
+
+    assert flow["device_code"] == "dev-code"
+    assert flow["user_code"] == "1234-ABCD"
+    assert flow["verification_url"] == "https://github.com/login/device"
+
+
+@patch("src.services.auth_service.requests.post")
+def test_complete_browser_device_flow_single_check_pending(mock_post: Mock) -> None:
+    pending_response = Mock()
+    pending_response.raise_for_status = Mock()
+    pending_response.json.return_value = {"error": "authorization_pending"}
+    mock_post.return_value = pending_response
+
+    settings = AppSettings(
+        config=AppConfig(
+            auth_mode="browser",
+            browser_auth={"enabled": True, "client_id": "Iv1.client", "scopes": "repo"},
+        )
+    )
+    auth = AuthService(settings)
+
+    with pytest.raises(PermissionError, match="pending"):
+        auth.complete_browser_device_flow(
+            device_code="dev-code",
+            interval=1,
+            expires_in=60,
+            open_browser=False,
+            single_check=True,
+        )

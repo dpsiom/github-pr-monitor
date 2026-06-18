@@ -243,10 +243,28 @@
             if (mode !== 'browser') {
                 throw new Error('Select Browser Sign-in in Authentication type first');
             }
-            const res = await fetch('/api/auth/browser/start', { method: 'POST' });
-            const data = await parseApiResponse(res);
-            showToast(data.message || 'Browser auth completed', 'success');
-            fetchPRs();
+            const startRes = await fetch('/api/auth/browser/start', { method: 'POST' });
+            const startData = await parseApiResponse(startRes);
+
+            const verificationUrl = startData.verification_url;
+            if (!verificationUrl) {
+                throw new Error('Missing verification URL from authentication response');
+            }
+
+            window.open(verificationUrl, '_blank', 'noopener');
+            showToast('Browser opened. Complete sign-in on GitHub...', 'success');
+
+            for (let attempt = 0; attempt < 90; attempt += 1) {
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                const pollRes = await fetch('/api/auth/browser/poll', { method: 'POST' });
+                const pollData = await parseApiResponse(pollRes);
+                if (pollData.completed) {
+                    showToast(pollData.message || 'Browser auth completed', 'success');
+                    fetchPRs();
+                    return;
+                }
+            }
+            throw new Error('Browser authentication timed out. Please try again.');
         } catch (e) {
             showToast(e.message, 'error');
         }
