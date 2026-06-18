@@ -29,7 +29,7 @@ class GitHubRepositoryGateway:
     """Repository pattern adapter for GitHub APIs."""
 
     settings: AppSettings
-    token: str
+    token: str | None
 
     @property
     def _rest_api_url(self) -> str:
@@ -38,11 +38,13 @@ class GitHubRepositoryGateway:
 
     @property
     def _headers(self) -> dict[str, str]:
-        return {
-            "Authorization": f"Bearer {self.token}",
+        headers = {
             "Accept": "application/vnd.github+json",
             "User-Agent": "github-pr-monitor",
         }
+        if self.token:
+            headers["Authorization"] = f"Bearer {self.token}"
+        return headers
 
     async def fetch_pending_review_prs(self, repositories: list[str]) -> list[PullRequest]:
         """Fetch open pull requests requiring review from configured repos."""

@@ -20,7 +20,7 @@ PRUpdateCallback = Callable[[list[PullRequest], datetime], None]
 class PRService:
     """Coordinates polling and PR actions."""
 
-    def __init__(self, settings: AppSettings, token: str) -> None:
+    def __init__(self, settings: AppSettings, token: str | None) -> None:
         self.settings = settings
         self.notification_service = NotificationService()
         self.gateway = GitHubRepositoryGateway(settings=settings, token=token)

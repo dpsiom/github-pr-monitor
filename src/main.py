@@ -14,13 +14,13 @@ def main() -> None:
     """Start the Flask web application."""
     settings = AppSettings.load()
     auth_service = AuthService(settings)
-    token = ""
+    token: str | None = None
     if settings.config.auth_mode == "browser":
         try:
             token = auth_service.get_or_request_token()
             auth_service.validate_token_scopes(token)
         except ValueError:
-            token = ""
+            token = None
     else:
         token = auth_service.get_or_request_token()
         auth_service.validate_token_scopes(token)
