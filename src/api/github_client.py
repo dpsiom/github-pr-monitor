@@ -189,7 +189,10 @@ class GitHubRepositoryGateway:
             response.raise_for_status()
             body: dict[str, Any] = await response.json()
 
-        nodes = body.get("data", {}).get("repository", {}).get("pullRequests", {}).get("nodes", [])
+        nodes = (
+            (body.get("data") or {})
+            .get("repository") or {}
+        ).get("pullRequests", {}).get("nodes", [])
         parsed: list[PullRequest] = []
         for node in nodes:
             reviewers = [
