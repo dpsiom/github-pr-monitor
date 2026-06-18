@@ -28,5 +28,9 @@ def test_main_wires_components() -> None:
     auth.validate_token_scopes.assert_called_once_with("token")
     mock_pr_cls.assert_called_once_with(settings=settings, token="token")
     pr_service.start.assert_called_once()
-    mock_create.assert_called_once_with(settings=settings, pr_service=pr_service)
+    mock_create.assert_called_once_with(
+        settings=settings,
+        pr_service=pr_service,
+        auth_service=auth,
+    )
     flask_app.run.assert_called_once()

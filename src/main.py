@@ -14,13 +14,22 @@ def main() -> None:
     """Start the Flask web application."""
     settings = AppSettings.load()
     auth_service = AuthService(settings)
-    token = auth_service.get_or_request_token()
-    auth_service.validate_token_scopes(token)
+    token: str | None = None
+    if settings.config.auth_mode == "browser":
+        try:
+            token = auth_service.get_or_request_token()
+            auth_service.validate_token_scopes(token)
+        except ValueError:
+            token = None
+    else:
+        token = auth_service.get_or_request_token()
+        auth_service.validate_token_scopes(token)
 
     pr_service = PRService(settings=settings, token=token)
-    pr_service.start()
+    if token:
+        pr_service.start()
 
-    app = create_app(settings=settings, pr_service=pr_service)
+    app = create_app(settings=settings, pr_service=pr_service, auth_service=auth_service)
 
     host = os.getenv("HOST", "")
     port = int(os.getenv("PORT", "5000"))

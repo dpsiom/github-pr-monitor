@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import os
 import time
+import webbrowser
 
 import jwt
 import requests
 
 from src.config.settings import AppSettings
-from src.utils.keychain import get_token_from_keychain
+from src.utils.keychain import get_token_from_keychain, save_token_to_keychain
 
 
 class AuthService:
@@ -22,6 +23,18 @@ class AuthService:
         """Resolve token from secure sources."""
         if self.settings.config.auth_mode == "github_app":
             return self._get_github_app_token()
+        if self.settings.config.auth_mode == "browser":
+            token = get_token_from_keychain(
+                service_name=self.settings.keychain_service,
+                username=self.settings.keychain_username,
+            )
+            if token:
+                return token
+
+            raise ValueError(
+                "Browser auth token not found in keychain. "
+                "Open Settings and run Browser Authentication."
+            )
 
         token = os.getenv(self.settings.token_env_var)
         if token:
@@ -38,6 +51,91 @@ class AuthService:
             "GitHub token is required. Set GITHUB_TOKEN environment variable "
             "or store it in the OS keychain."
         )
+
+    def authenticate_browser_session(self, open_browser: bool = True) -> str:
+        """Run OAuth device flow and store resulting token in keychain."""
+        browser = self.settings.config.browser_auth
+        if self.settings.config.auth_mode != "browser":
+            raise ValueError("auth_mode must be set to browser to use browser auth")
+        if not browser.enabled:
+            raise ValueError("browser_auth.enabled must be true when auth_mode=browser")
+        if not browser.client_id:
+            raise ValueError("browser_auth.client_id is required")
+
+        code_response = requests.post(
+            "https://github.com/login/device/code",
+            data={
+                "client_id": browser.client_id,
+                "scope": browser.scopes,
+            },
+            headers={
+                "Accept": "application/json",
+                "User-Agent": "github-pr-monitor",
+            },
+            timeout=20,
+        )
+        code_response.raise_for_status()
+        code_payload = code_response.json()
+        device_code = code_payload.get("device_code")
+        interval = code_payload.get("interval", 5)
+        expires_in = code_payload.get("expires_in", 900)
+        verification_url = code_payload.get("verification_uri_complete") or code_payload.get(
+            "verification_uri"
+        )
+
+        if not isinstance(device_code, str) or not device_code:
+            raise PermissionError("Failed to start browser authentication")
+        if not isinstance(verification_url, str) or not verification_url:
+            raise PermissionError("Missing verification URL for browser authentication")
+
+        if open_browser:
+            webbrowser.open(verification_url)
+
+        deadline = time.time() + int(expires_in)
+        poll_interval = int(interval)
+
+        while time.time() < deadline:
+            token_response = requests.post(
+                "https://github.com/login/oauth/access_token",
+                data={
+                    "client_id": browser.client_id,
+                    "device_code": device_code,
+                    "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+                },
+                headers={
+                    "Accept": "application/json",
+                    "User-Agent": "github-pr-monitor",
+                },
+                timeout=20,
+            )
+            token_response.raise_for_status()
+            token_payload = token_response.json()
+
+            token = token_payload.get("access_token")
+            if isinstance(token, str) and token:
+                save_token_to_keychain(
+                    service_name=self.settings.keychain_service,
+                    username=self.settings.keychain_username,
+                    token=token,
+                )
+                return token
+
+            error_code = token_payload.get("error")
+            if error_code == "authorization_pending":
+                time.sleep(poll_interval)
+                continue
+            if error_code == "slow_down":
+                poll_interval += 5
+                time.sleep(poll_interval)
+                continue
+            if error_code == "expired_token":
+                raise PermissionError("Browser authentication expired before completion")
+            if error_code == "access_denied":
+                raise PermissionError("Browser authentication was denied")
+
+            raise PermissionError("Browser authentication failed")
+
+        raise PermissionError("Browser authentication timed out")
 
     def _get_github_app_token(self) -> str:
         """Create and exchange a GitHub App JWT for an installation token."""
@@ -92,7 +190,7 @@ class AuthService:
             raise PermissionError("Invalid GitHub token")
         response.raise_for_status()
 
-        if self.settings.config.auth_mode == "pat":
+        if self.settings.config.auth_mode in {"pat", "browser"}:
             scopes = response.headers.get("X-OAuth-Scopes", "")
             # Fine-grained PATs do not populate X-OAuth-Scopes (the header is
             # absent or empty). Only enforce scope check for classic PATs that

@@ -20,7 +20,7 @@ PRUpdateCallback = Callable[[list[PullRequest], datetime], None]
 class PRService:
     """Coordinates polling and PR actions."""
 
-    def __init__(self, settings: AppSettings, token: str) -> None:
+    def __init__(self, settings: AppSettings, token: str | None) -> None:
         self.settings = settings
         self.notification_service = NotificationService()
         self.gateway = GitHubRepositoryGateway(settings=settings, token=token)
@@ -39,6 +39,10 @@ class PRService:
     def subscribe_error(self, callback: Callable[[str], None]) -> None:
         """Subscribe to polling errors."""
         self.notification_service.subscribe("polling_error", lambda _n, payload: callback(payload))
+
+    def update_token(self, token: str) -> None:
+        """Replace gateway token after re-authentication."""
+        self.gateway.token = token
 
     def start(self) -> None:
         """Start polling in a dedicated daemon thread."""

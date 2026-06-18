@@ -22,3 +22,8 @@ github_app:
   app_id: null
   installation_id: null
   private_key_path: null
+
+browser_auth:
+  enabled: false
+  client_id: null
+  scopes: repo read:org
