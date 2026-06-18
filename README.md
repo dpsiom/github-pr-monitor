@@ -18,7 +18,7 @@ Runs as a lightweight Flask app in Docker. Open **[http://localhost:5000](http:/
 cp config.example.yaml config.yaml
 ```
 
-Edit `config.yaml` to list your repositories and select browser auth:
+Edit `config.yaml` to list your repositories. **No auth config is needed here** — authentication is configured from the web UI.
 
 ```yaml
 repositories:
@@ -30,13 +30,6 @@ repositories:
 monitor:
   poll_interval_seconds: 60        # minimum 30
   realtime_mode: polling           # or: webhook
-
-auth_mode: browser
-
-browser_auth:
-  enabled: true
-  client_id: Iv1.your_oauth_app_client_id
-  scopes: repo read:org
 ```
 
 ### 3. Pull and run
@@ -51,16 +44,28 @@ The full `docker/docker-compose.yaml` for reference:
 services:
   app:
     image: ghcr.io/dpsiom/github-pr-monitor:latest
+    environment:
+      - DATA_DIR=/app/data
     volumes:
       - ./config.yaml:/app/config.yaml:ro
+      - app_data:/app/data
     ports:
       - "5000:5000"
+
+volumes:
+  app_data:
 ```
 
-### 4. Open the app
+### 4. Configure authentication and open the app
 
-Open **[http://localhost:5000](http://localhost:5000)** in your browser.
-Open the settings icon, choose **Browser Sign-in (OAuth)**, then click **Authenticate In Browser**.
+1. Open **[http://localhost:5000](http://localhost:5000)** in your browser.
+2. Click the **⚙ settings icon** in the top-right corner.
+3. Select **Browser Sign-in (OAuth)** as the authentication type.
+4. Enter your OAuth app client ID (see [Authentication](#browser-sign-in-oauth-device-flow) below for how to create one).
+5. Click **Save settings**, then **Authenticate In Browser**.
+6. Sign in on GitHub — if your organisation uses Okta or another SSO provider, GitHub redirects there automatically.
+
+Authentication settings are saved to a named Docker volume (`app_data`) and persist across container restarts.
 
 ---
 
@@ -112,20 +117,16 @@ docker run --rm \
   ghcr.io/dpsiom/github-pr-monitor:latest
 ```
 
-### Browser Sign-in (OAuth device flow)
+### Browser Sign-in (OAuth device flow) {#browser-sign-in-oauth-device-flow}
 
-Use this mode when you want interactive sign-in in your browser, similar to GitHub login in desktop tools. If your organization uses Okta (or another IdP) through GitHub SSO, GitHub handles that redirect automatically.
+Use this mode when you want interactive sign-in in your browser, similar to GitHub login in desktop tools. If your organisation uses Okta (or another IdP) through GitHub SSO, GitHub handles that redirect automatically — no Okta-specific config required here.
 
-```yaml
-auth_mode: browser
+**How to get a client ID:**
+1. Go to **GitHub Settings → Developer settings → OAuth Apps → New OAuth App**.
+2. Set *Authorization callback URL* to `http://localhost:5000` (or your host).
+3. Copy the **Client ID** and enter it in the app settings panel.
 
-browser_auth:
-  enabled: true
-  client_id: "Iv1.your_oauth_app_client_id"
-  scopes: "repo read:org"
-```
-
-Then open the app UI, click the settings icon, choose **Browser Sign-in (OAuth)**, save, and click **Authenticate In Browser**.
+Authentication settings are stored in the writable `app_data` Docker volume (`/app/data/runtime_config.yaml`), not in `config.yaml`.
 
 ---
 
@@ -150,9 +151,10 @@ The web UI will be available at **http://localhost:5000**.
 | `docker pull` denied | Image not yet published — build locally: `docker build -f docker/Dockerfile -t github-pr-monitor .` then use `github-pr-monitor` as the image name |
 | Browser "connection refused" | Wait a few seconds for the container to start, then refresh |
 | Empty PR list | Check `config.yaml` repository names are `owner/repo` format and complete browser authentication from the Settings panel |
+| Auth settings lost after restart | Ensure the `app_data` Docker volume is mounted (`DATA_DIR=/app/data`); auth settings are written to that volume |
+| Browser auth fails immediately | Verify the OAuth client ID entered in Settings is valid |
 | Port 5000 in use | Use `-p 5001:5000` and open `http://localhost:5001` |
 | Rate limit errors | Increase `monitor.poll_interval_seconds` (minimum 30) |
-| Browser auth fails immediately | Verify `browser_auth.client_id` is a valid GitHub OAuth app client ID and `browser_auth.enabled` is true |
 
 ---
 

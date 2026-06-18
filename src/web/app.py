@@ -31,8 +31,8 @@ def create_app(settings: AppSettings, pr_service: PRService, auth_service: AuthS
         "error": None,
         "status": "Starting...",
     }
-    if settings.config.auth_mode == "browser" and not pr_service.gateway.token:
-        state["status"] = "Authentication required | Open Settings to sign in"
+    if not pr_service.gateway.token:
+        state["status"] = "Authentication required — open Settings ⚙ to sign in"
 
     def on_prs_updated(prs: list[PullRequest], ts: datetime) -> None:
         state["prs"] = prs
@@ -156,14 +156,22 @@ def create_app(settings: AppSettings, pr_service: PRService, auth_service: AuthS
     @app.route("/api/settings", methods=["POST"])
     def api_save_settings() -> Any:
         payload = request.get_json(force=True)
+        # Only auth fields are accepted; repos and monitor are read-only (config.yaml).
+        auth_fields = {
+            k: payload[k]
+            for k in ("auth_mode", "github_app", "browser_auth")
+            if k in payload
+        }
+        if not auth_fields:
+            return jsonify({"error": "No auth fields provided"}), 400
         try:
-            updated = AppConfig.model_validate(payload)
+            base = settings.config.model_dump(mode="json")
+            base.update(auth_fields)
+            settings.config = AppConfig.model_validate(base)
         except Exception as exc:  # noqa: BLE001
-            return jsonify({"error": f"Invalid settings payload: {exc}"}), 400
-
-        settings.config = updated
-        settings.save_config()
-        return jsonify({"success": True, "message": "Settings saved"})
+            return jsonify({"error": f"Invalid settings: {exc}"}), 400
+        settings.save_auth_config()
+        return jsonify({"success": True, "message": "Authentication settings saved"})
 
     @app.route("/api/auth/browser/start", methods=["POST"])
     def api_auth_browser_start() -> Any:

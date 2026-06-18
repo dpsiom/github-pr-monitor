@@ -8,10 +8,20 @@ services:
     #   context: ..
     #   dockerfile: docker/Dockerfile
 
+    environment:
+      # Writable directory for auth settings saved via the web UI.
+      # The named volume below is mounted here so tokens persist across restarts.
+      - DATA_DIR=/app/data
     volumes:
       - ../config.yaml:/app/config.yaml:ro
+      - app_data:/app/data
       # Mount the PEM key only if using GitHub App auth:
       # - /absolute/path/to/app.pem:/run/secrets/app.pem:ro
     ports:
       # Open http://localhost:5000 in a browser to access the web UI
       - "5000:5000"
+
+volumes:
+  # Stores auth settings (runtime_config.yaml) saved from the web UI settings panel.
+  # Docker manages this volume; data persists across container restarts.
+  app_data:

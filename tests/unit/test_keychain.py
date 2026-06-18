@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+from keyring.errors import NoKeyringError
+
 from src.utils.keychain import get_token_from_keychain, save_token_to_keychain
 
 
@@ -13,8 +15,23 @@ def test_save_token_to_keychain(mock_set_password: object) -> None:
     mock_set_password.assert_called_once_with("service", "user", "token")
 
 
+@patch("src.utils.keychain.keyring.set_password", side_effect=NoKeyringError())
+def test_save_token_to_keychain_ignores_missing_backend(mock_set_password: object) -> None:
+    save_token_to_keychain("service", "user", "token")
+    mock_set_password.assert_called_once_with("service", "user", "token")
+
+
 @patch("src.utils.keychain.keyring.get_password", return_value="token")
 def test_get_token_from_keychain(mock_get_password: object) -> None:
     token = get_token_from_keychain("service", "user")
     assert token == "token"
+    mock_get_password.assert_called_once_with("service", "user")
+
+
+@patch("src.utils.keychain.keyring.get_password", side_effect=NoKeyringError())
+def test_get_token_from_keychain_returns_none_when_backend_missing(
+    mock_get_password: object,
+) -> None:
+    token = get_token_from_keychain("service", "user")
+    assert token is None
     mock_get_password.assert_called_once_with("service", "user")

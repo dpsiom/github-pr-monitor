@@ -184,20 +184,10 @@ def test_api_settings(client):
 
 def test_api_settings_save(client):
     test_client, _, _, settings = client
+    settings.runtime_config_path = settings.config_path.parent / "runtime_config.yaml"
     response = test_client.post(
         "/api/settings",
         json={
-            "repositories": [{"name": "octo/repo", "enabled": True}],
-            "organization_monitoring": False,
-            "organization": None,
-            "monitor": {
-                "poll_interval_seconds": 60,
-                "realtime_mode": "polling",
-                "smee_url": None,
-                "webhook_host": "127.0.0.1",
-                "webhook_port": 8765,
-                "webhook_secret": None,
-            },
             "auth_mode": "browser",
             "github_app": {
                 "enabled": False,
@@ -215,6 +205,12 @@ def test_api_settings_save(client):
     assert response.status_code == 200
     assert settings.config.auth_mode == "browser"
     assert settings.config.browser_auth.client_id == "Iv1.example"
+
+
+def test_api_settings_save_rejects_empty_payload(client):
+    test_client, _, _, _ = client
+    response = test_client.post("/api/settings", json={"repositories": []})
+    assert response.status_code == 400
 
 
 def test_api_auth_browser_start(client):

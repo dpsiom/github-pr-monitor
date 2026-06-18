@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from src.config.settings import AppSettings
+from src.config.settings import AppConfig, AppSettings
 
 
 def test_settings_loads_default_when_missing(tmp_path: Path) -> None:
@@ -61,3 +61,45 @@ def test_settings_parses_browser_auth(tmp_path: Path) -> None:
     assert loaded.auth_mode == "browser"
     assert loaded.browser_auth.enabled is True
     assert loaded.browser_auth.client_id == "Iv1.browser"
+
+
+def test_runtime_config_overlays_auth_fields(tmp_path: Path) -> None:
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        "repositories:\n  - name: octo/repo\n    enabled: true\n",
+        encoding="utf-8",
+    )
+    runtime_file = tmp_path / "runtime_config.yaml"
+    runtime_file.write_text(
+        (
+            "auth_mode: browser\n"
+            "browser_auth:\n"
+            "  enabled: true\n"
+            "  client_id: 'Iv1.runtime'\n"
+            "  scopes: 'repo read:org'\n"
+        ),
+        encoding="utf-8",
+    )
+
+    settings = AppSettings(
+        config_path=config_file,
+        runtime_config_path=runtime_file,
+    )
+    settings.config = AppSettings._load_yaml_config(config_file)
+    settings._apply_runtime_auth_config()
+
+    # Auth fields come from runtime config
+    assert settings.config.auth_mode == "browser"
+    assert settings.config.browser_auth.client_id == "Iv1.runtime"
+    # Repos still come from config.yaml
+    assert settings.config.repositories[0].name == "octo/repo"
+
+
+def test_runtime_config_missing_does_not_crash(tmp_path: Path) -> None:
+    settings = AppSettings(
+        config_path=tmp_path / "config.yaml",
+        runtime_config_path=tmp_path / "runtime_config.yaml",
+    )
+    settings.config = AppConfig()
+    settings._apply_runtime_auth_config()  # should not raise
+    assert settings.config.auth_mode == "browser"  # default unchanged
