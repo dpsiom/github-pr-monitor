@@ -142,6 +142,18 @@
                     <button onclick="startBrowserAuth()" class="px-3 py-2 rounded-md text-xs font-medium bg-accent/20 text-accent hover:bg-accent/30 border border-accent/40 transition-colors">
                         Authenticate In Browser
                     </button>
+                    <div id="browser-auth-instructions" class="hidden rounded-lg border border-accent/30 bg-accent/10 p-3 space-y-2">
+                        <p class="text-xs text-gray-300">If prompted, enter this code on GitHub:</p>
+                        <div class="flex items-center gap-2">
+                            <code id="browser-auth-user-code" class="px-2 py-1 rounded bg-surface border border-border text-sm text-white font-semibold tracking-wide"></code>
+                            <button id="browser-auth-copy-code" type="button" class="px-2 py-1 rounded border border-border text-xs text-gray-200 hover:bg-surface-hover">Copy</button>
+                        </div>
+                        <p class="text-xs text-gray-400">Verification URL:</p>
+                        <div class="flex items-center gap-2">
+                            <a id="browser-auth-url" href="#" target="_blank" rel="noopener" class="text-xs text-accent underline break-all"></a>
+                            <button id="browser-auth-open-url" type="button" class="px-2 py-1 rounded border border-border text-xs text-gray-200 hover:bg-surface-hover">Open</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -251,8 +263,35 @@
                 throw new Error('Missing verification URL from authentication response');
             }
 
-            window.open(verificationUrl, '_blank', 'noopener');
-            showToast('Browser opened. Complete sign-in on GitHub...', 'success');
+            const userCode = (startData.user_code || '').toString().trim();
+            const instructions = document.getElementById('browser-auth-instructions');
+            const codeEl = document.getElementById('browser-auth-user-code');
+            const urlEl = document.getElementById('browser-auth-url');
+            const copyBtn = document.getElementById('browser-auth-copy-code');
+            const openBtn = document.getElementById('browser-auth-open-url');
+            if (instructions && codeEl && urlEl && copyBtn && openBtn) {
+                instructions.classList.remove('hidden');
+                codeEl.textContent = userCode || 'Code unavailable';
+                urlEl.href = verificationUrl;
+                urlEl.textContent = verificationUrl;
+                copyBtn.onclick = async () => {
+                    if (!userCode) return;
+                    try {
+                        await navigator.clipboard.writeText(userCode);
+                        showToast('Code copied', 'success');
+                    } catch {
+                        showToast('Unable to copy code automatically', 'error');
+                    }
+                };
+                openBtn.onclick = () => window.open(verificationUrl, '_blank', 'noopener');
+            }
+
+            const popup = window.open(verificationUrl, '_blank', 'noopener');
+            if (!popup) {
+                showToast('Popup blocked. Use the verification URL and code shown below.', 'error');
+            } else {
+                showToast('Browser opened. Complete sign-in on GitHub...', 'success');
+            }
 
             for (let attempt = 0; attempt < 90; attempt += 1) {
                 await new Promise(resolve => setTimeout(resolve, 2000));
