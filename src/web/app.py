@@ -13,6 +13,7 @@ from src.api.models import PullRequest
 from src.config.settings import AppConfig, AppSettings
 from src.services.auth_service import AuthService
 from src.services.pr_service import PRService
+from src.utils.keychain import save_token_to_keychain
 
 
 def create_app(settings: AppSettings, pr_service: PRService, auth_service: AuthService) -> Flask:
@@ -168,10 +169,34 @@ def create_app(settings: AppSettings, pr_service: PRService, auth_service: AuthS
             base = settings.config.model_dump(mode="json")
             base.update(auth_fields)
             settings.config = AppConfig.model_validate(base)
+            settings.save_auth_config()
         except Exception as exc:  # noqa: BLE001
             return jsonify({"error": f"Invalid settings: {exc}"}), 400
-        settings.save_auth_config()
         return jsonify({"success": True, "message": "Authentication settings saved"})
+
+    @app.route("/api/auth/pat", methods=["POST"])
+    def api_auth_pat() -> Any:
+        data = request.get_json(force=True)
+        token = str(data.get("token") or "").strip()
+        if not token:
+            return jsonify({"error": "PAT token is required"}), 400
+
+        try:
+            original_mode = settings.config.auth_mode
+            settings.config.auth_mode = "pat"
+            auth_service.validate_token_scopes(token)
+            save_token_to_keychain(
+                service_name=settings.keychain_service,
+                username=settings.keychain_username,
+                token=token,
+            )
+            pr_service.update_token(token)
+            pr_service.start()
+            threading.Thread(target=pr_service.force_refresh, daemon=True).start()
+            return jsonify({"success": True, "message": "PAT authentication completed"})
+        except Exception as exc:  # noqa: BLE001
+            settings.config.auth_mode = original_mode
+            return jsonify({"error": str(exc)}), 400
 
     @app.route("/api/auth/browser/start", methods=["POST"])
     def api_auth_browser_start() -> Any:

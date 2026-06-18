@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -220,6 +220,28 @@ def test_api_auth_browser_start(client):
     auth_service.authenticate_browser_session.assert_called_once_with(open_browser=True)
     auth_service.validate_token_scopes.assert_called_once_with("browser-token")
     pr_service.update_token.assert_called_once_with("browser-token")
+
+
+@patch("src.web.app.save_token_to_keychain")
+def test_api_auth_pat_start(mock_save_token: Mock, client):
+    test_client, pr_service, auth_service, _ = client
+    response = test_client.post(
+        "/api/auth/pat",
+        json={"token": "ghp_test_token"},
+    )
+    assert response.status_code == 200
+    auth_service.validate_token_scopes.assert_called_once_with("ghp_test_token")
+    mock_save_token.assert_called_once()
+    pr_service.update_token.assert_called_once_with("ghp_test_token")
+
+
+def test_api_auth_pat_missing_token(client):
+    test_client, _, _, _ = client
+    response = test_client.post(
+        "/api/auth/pat",
+        json={"token": ""},
+    )
+    assert response.status_code == 400
 
 
 def test_no_ansi_in_patch_response(client):

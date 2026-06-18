@@ -58,7 +58,7 @@ volumes:
 
 ### 4. Configure authentication and open the app
 
-1. Open **[http://localhost:5000](http://localhost:5000)** in your browser.
+1. Open **[http://localhost:<host_port>](http://localhost:<host_port>)** in your browser.
 2. Click the **⚙ settings icon** in the top-right corner.
 3. Select **Browser Sign-in (OAuth)** as the authentication type.
 4. Enter your OAuth app client ID (see [Authentication](#browser-sign-in-oauth-device-flow) below for how to create one).
@@ -123,8 +123,9 @@ Use this mode when you want interactive sign-in in your browser, similar to GitH
 
 **How to get a client ID:**
 1. Go to **GitHub Settings → Developer settings → OAuth Apps → New OAuth App**.
-2. Set *Authorization callback URL* to `http://localhost:5000` (or your host).
-3. Copy the **Client ID** and enter it in the app settings panel.
+2. Set *Home page URL* to `http://localhost:<host_port>` (or your host).
+3. Set *Authorization callback URL* to `http://localhost:<host_port>` (or your host).
+4. Copy the **Client ID** and enter it in the app settings panel.
 
 Authentication settings are stored in the writable `app_data` Docker volume (`/app/data/runtime_config.yaml`), not in `config.yaml`.
 
@@ -140,7 +141,7 @@ cp config.example.yaml config.yaml   # edit as above
 python -m src.main
 ```
 
-The web UI will be available at **http://localhost:5000**.
+The web UI will be available at **http://localhost:<host_port>**.
 
 ---
 
@@ -153,7 +154,7 @@ The web UI will be available at **http://localhost:5000**.
 | Empty PR list | Check `config.yaml` repository names are `owner/repo` format and complete browser authentication from the Settings panel |
 | Auth settings lost after restart | Ensure the `app_data` Docker volume is mounted (`DATA_DIR=/app/data`); auth settings are written to that volume |
 | Browser auth fails immediately | Verify the OAuth client ID entered in Settings is valid |
-| Port 5000 in use | Use `-p 5001:5000` and open `http://localhost:5001` |
+| Port 5000 in use | Use `-p 5004:5000` and open `http://localhost:5004` |
 | Rate limit errors | Increase `monitor.poll_interval_seconds` (minimum 30) |
 
 ---
