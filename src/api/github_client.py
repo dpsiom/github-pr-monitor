@@ -187,12 +187,17 @@ class GitHubRepositoryGateway:
             session.post(self.settings.graphql_url, json=payload, ssl=True) as response,
         ):
             response.raise_for_status()
-            body: dict[str, Any] = await response.json()
+            body: dict[str, Any] = await response.json() or {}
 
-        nodes = (
-            (body.get("data") or {})
-            .get("repository") or {}
-        ).get("pullRequests", {}).get("nodes", [])
+        # Surface GraphQL-level errors (rate limits, auth, missing permissions) so
+        # they appear in the UI rather than silently returning an empty PR list.
+        gql_errors = body.get("errors")
+        repo_data = ((body.get("data") or {}).get("repository") or {})
+        if gql_errors and not repo_data:
+            messages = "; ".join(e.get("message", "unknown error") for e in gql_errors)
+            raise RuntimeError(f"GitHub API error for {repository}: {messages}")
+
+        nodes = (repo_data.get("pullRequests") or {}).get("nodes") or []
         parsed: list[PullRequest] = []
         for node in nodes:
             reviewers = [

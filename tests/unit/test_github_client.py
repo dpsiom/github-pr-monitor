@@ -133,6 +133,103 @@ async def test_fetch_pending_review_prs_parses_graphql() -> None:
 
 
 @pytest.mark.asyncio
+async def test_fetch_prs_null_pull_requests_returns_empty() -> None:
+    """Null pullRequests field (e.g. permission denied) must not raise NoneType."""
+    payload = {"data": {"repository": {"pullRequests": None}}}
+    session = DummySession(post_payloads=[payload], get_payloads=[])
+
+    with patch("src.api.github_client.aiohttp.ClientSession", return_value=session):
+        gateway = GitHubRepositoryGateway(settings=AppSettings(), token="token")
+        prs = await gateway.fetch_pending_review_prs(["octo/repo"])
+
+    assert prs == []
+
+
+@pytest.mark.asyncio
+async def test_fetch_prs_null_nodes_returns_empty() -> None:
+    """Null nodes list must not raise NoneType."""
+    payload = {"data": {"repository": {"pullRequests": {"nodes": None}}}}
+    session = DummySession(post_payloads=[payload], get_payloads=[])
+
+    with patch("src.api.github_client.aiohttp.ClientSession", return_value=session):
+        gateway = GitHubRepositoryGateway(settings=AppSettings(), token="token")
+        prs = await gateway.fetch_pending_review_prs(["octo/repo"])
+
+    assert prs == []
+
+
+@pytest.mark.asyncio
+async def test_fetch_prs_graphql_error_no_data_raises() -> None:
+    """GraphQL errors with null data (rate limit, auth) surface as RuntimeError."""
+    payload = {
+        "data": None,
+        "errors": [{"message": "API rate limit exceeded", "type": "RATE_LIMITED"}],
+    }
+    # Backoff decorator makes up to 5 attempts; supply one payload per attempt.
+    session = DummySession(post_payloads=[payload] * 5, get_payloads=[])
+
+    with (
+        patch("src.api.github_client.aiohttp.ClientSession", return_value=session),
+        patch("src.utils.rate_limiter.asyncio.sleep"),
+    ):
+        gateway = GitHubRepositoryGateway(settings=AppSettings(), token="token")
+        with pytest.raises(RuntimeError, match="API rate limit exceeded"):
+            await gateway.fetch_pending_review_prs(["octo/repo"])
+
+
+@pytest.mark.asyncio
+async def test_fetch_prs_graphql_error_with_partial_data_returns_prs() -> None:
+    """GraphQL errors alongside partial data (e.g. null statusCheckRollup) still return PRs."""
+    payload = {
+        "data": {
+            "repository": {
+                "pullRequests": {
+                    "nodes": [
+                        {
+                            "number": 5,
+                            "title": "Fix bug",
+                            "body": "",
+                            "isDraft": False,
+                            "state": "OPEN",
+                            "url": "https://example/pull/5",
+                            "updatedAt": "2026-06-15T10:00:00Z",
+                            "author": {"login": "dev"},
+                            "baseRefName": "main",
+                            "headRefName": "fix",
+                            "reviewThreads": {"totalCount": 0},
+                            "labels": {"nodes": []},
+                            "milestone": None,
+                            "reviewRequests": {"nodes": []},
+                            "files": {"totalCount": 2, "nodes": [{"additions": 1, "deletions": 0}]},
+                            "commits": {
+                                "nodes": [{"commit": {"statusCheckRollup": None}}]
+                            },
+                        }
+                    ]
+                }
+            }
+        },
+        "errors": [
+            {
+                "message": "Resource not accessible by integration",
+                "path": ["repository", "pullRequests", "nodes", 0, "commits", "nodes", 0, "commit", "statusCheckRollup"],
+                "type": "FORBIDDEN",
+            }
+        ],
+    }
+    session = DummySession(post_payloads=[payload], get_payloads=[])
+
+    with patch("src.api.github_client.aiohttp.ClientSession", return_value=session):
+        gateway = GitHubRepositoryGateway(settings=AppSettings(), token="token")
+        prs = await gateway.fetch_pending_review_prs(["octo/repo"])
+
+    assert len(prs) == 1
+    assert prs[0].number == 5
+    assert prs[0].ci_status.state == "UNKNOWN"
+    assert prs[0].checks == []
+
+
+@pytest.mark.asyncio
 async def test_fetch_pull_request_details_populates_changes_and_comments() -> None:
     files_payload = [
         {
