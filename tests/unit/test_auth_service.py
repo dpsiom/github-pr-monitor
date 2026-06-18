@@ -13,7 +13,7 @@ from src.services.auth_service import AuthService
 
 def test_get_token_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GITHUB_TOKEN", "abc123")
-    auth = AuthService(AppSettings())
+    auth = AuthService(AppSettings(config=AppConfig(auth_mode="pat")))
     assert auth.get_or_request_token() == "abc123"
 
 
@@ -86,7 +86,7 @@ def test_get_token_raises_when_no_source(
     mock_keychain: Mock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-    auth = AuthService(AppSettings())
+    auth = AuthService(AppSettings(config=AppConfig(auth_mode="pat")))
     with pytest.raises(ValueError, match="GitHub token is required"):
         auth.get_or_request_token()
     mock_keychain.assert_called_once()

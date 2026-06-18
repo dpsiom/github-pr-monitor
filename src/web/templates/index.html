@@ -182,17 +182,6 @@
         try {
             const authMode = document.getElementById('settings-auth-mode').value;
             const payload = {
-                repositories: appSettings?.repositories || [],
-                organization_monitoring: appSettings?.organization_monitoring || false,
-                organization: appSettings?.organization || null,
-                monitor: appSettings?.monitor || {
-                    poll_interval_seconds: appSettings?.poll_interval_seconds || 60,
-                    realtime_mode: appSettings?.realtime_mode || 'polling',
-                    smee_url: null,
-                    webhook_host: '127.0.0.1',
-                    webhook_port: 8765,
-                    webhook_secret: null,
-                },
                 auth_mode: authMode,
                 github_app: {
                     enabled: authMode === 'github_app',
