@@ -212,7 +212,10 @@ async def test_fetch_prs_graphql_error_with_partial_data_returns_prs() -> None:
         "errors": [
             {
                 "message": "Resource not accessible by integration",
-                "path": ["repository", "pullRequests", "nodes", 0, "commits", "nodes", 0, "commit", "statusCheckRollup"],
+                "path": [
+                    "repository", "pullRequests", "nodes", 0,
+                    "commits", "nodes", 0, "commit", "statusCheckRollup",
+                ],
                 "type": "FORBIDDEN",
             }
         ],
