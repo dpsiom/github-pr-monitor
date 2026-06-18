@@ -123,9 +123,11 @@ For a **fine-grained PAT**, you must configure both repository access and indivi
 | --- | --- | --- |
 | **Pull requests** | Read and write | List open PRs, submit reviews (approve / request changes), post comments, close PRs |
 | **Contents** | Read and write | Merge pull requests (merge, squash, rebase) |
+| **Actions** | Read-only | View check runs / workflow status for each PR |
+| **Commit statuses** | Read-only | View commit status (CI pass/fail) for each PR |
 | **Metadata** | Read-only | Required for all API access (granted automatically when any other permission is enabled) |
 
-> **Note:** If you only need to _monitor_ PRs without taking actions, **Pull requests: Read-only** and **Metadata: Read-only** are sufficient. Merge and review actions require write access.
+> **Note:** If you only need to _monitor_ PRs without taking actions, **Pull requests: Read-only**, **Actions: Read-only**, **Commit statuses: Read-only**, and **Metadata: Read-only** are sufficient. Merge and review actions require write access.
 
 ### GitHub App
 
