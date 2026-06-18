@@ -123,8 +123,9 @@ Use this mode when you want interactive sign-in in your browser, similar to GitH
 
 **How to get a client ID:**
 1. Go to **GitHub Settings → Developer settings → OAuth Apps → New OAuth App**.
-2. Set *Authorization callback URL* to `http://localhost:<host_port>` (or your host).
-3. Copy the **Client ID** and enter it in the app settings panel.
+2. Set *Home page URL* to `http://localhost:<host_port>` (or your host).
+3. Set *Authorization callback URL* to `http://localhost:<host_port>` (or your host).
+4. Copy the **Client ID** and enter it in the app settings panel.
 
 Authentication settings are stored in the writable `app_data` Docker volume (`/app/data/runtime_config.yaml`), not in `config.yaml`.
 
