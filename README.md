@@ -237,6 +237,63 @@ Authentication settings are stored in the writable `app_data` Docker volume (`/a
 
 ---
 
+### Personal Access Token — fine-grained (PAT) {#pat}
+
+A fine-grained PAT is the lightest-weight option. It is tied to your personal GitHub account and can be scoped to individual repositories. It does not require creating a GitHub App but provides less auditability and no automatic token rotation.
+
+> **Corporate note:** Some organisations disable fine-grained PATs or require admin approval. Check with your GitHub org owner before using this method.
+
+#### Step 1 — Create the fine-grained PAT
+
+1. Go to **GitHub Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token**.
+2. Fill in the token form:
+
+   | Field | What to enter |
+   | --- | --- |
+   | **Token name** | Any descriptive name, e.g. `pr-monitor-local` |
+   | **Expiration** | Choose the shortest period acceptable to you (90 days maximum is a sensible default) |
+   | **Resource owner** | Your personal account, or your organisation if the repos are there |
+
+3. Under **Repository access**, select **Only select repositories** and tick each repository you want the monitor to access.
+
+4. Under **Permissions → Repository permissions**, set **only** the permissions below and leave everything else as **No access**:
+
+   | Permission | Level | Why |
+   | --- | --- | --- |
+   | Pull requests | Read and write | Fetch, approve, comment, merge, close PRs |
+   | Contents | Read-only | Read file diffs |
+   | Checks | Read-only | Show CI check status |
+   | Commit statuses | Read-only | Show commit-level CI status |
+   | Metadata | Read-only | Always required for fine-grained PATs |
+
+5. Click **Generate token** and copy the value immediately — GitHub will not show it again.
+
+#### Step 2 — Enter the PAT in the app
+
+1. Open the app at `http://localhost:5000`.
+2. Click the **⚙ settings icon**.
+3. Set **Authentication type** to **Personal Access Token**.
+4. Paste the token into the **PAT token** field.
+5. Click **Use PAT For This Session**.
+
+The token is stored in the OS keychain (or in memory when no keychain is available, such as inside Docker). It is not written to `config.yaml`.
+
+#### Applying the PAT to each repository
+
+The repository-level scoping happens at token creation time (Step 1 above — **Only select repositories**). Once the token is in use, the app will only be able to call the GitHub API for those repositories regardless of what is in `config.yaml`. Any repo listed in `config.yaml` that is not covered by the token will simply return a 404 or 403 and be skipped.
+
+#### Comparison with GitHub App
+
+| | Fine-grained PAT | GitHub App |
+| --- | --- | --- |
+| Repository scope | Set at token creation | Set at app installation |
+| Token lifetime | Fixed expiry (max 1 year) | Auto-rotated (1 hour) |
+| Tied to a user account | Yes | No — app acts as itself |
+| Requires app registration | No | Yes |
+| Best for | Personal / local use | Corporate / team use |
+
+---
+
 ## Running natively (Python)
 
 Requires Python 3.11+.
@@ -260,6 +317,8 @@ The web UI will be available at **http://localhost:<host_port>**.
 | Empty PR list | Check `config.yaml` repository names are `owner/repo` format and complete browser authentication from the Settings panel |
 | Auth settings lost after restart | Ensure the `app_data` Docker volume is mounted (`DATA_DIR=/app/data`); auth settings are written to that volume |
 | Browser auth fails immediately | Verify the OAuth client ID entered in Settings is valid |
+| PAT — `401 Unauthorized` | The token has expired or been revoked — generate a new fine-grained PAT and re-enter it in Settings |
+| PAT — `403 Forbidden` on a repo | The token was not granted access to that repository at creation time — regenerate the token with that repo included |
 | GitHub App — `401 Unauthorized` | Check `app_id` and `installation_id` in `config.yaml` are correct numbers (not the app slug name) |
 | GitHub App — `private_key_path` error | Ensure the `.pem` file is mounted into the container at exactly the path set in `config.yaml` and is readable |
 | GitHub App — repos not shown | Confirm the app is installed on those specific repositories (GitHub → Settings → Installations) and they are listed in `config.yaml` |
