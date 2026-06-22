@@ -8,7 +8,7 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6.0.3
+      - uses: actions/checkout@v7.0.0
       - uses: actions/setup-python@v6.2.0
         with:
           python-version: "3.11"
@@ -28,7 +28,7 @@ jobs:
   workflow-safety:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6.0.3
+      - uses: actions/checkout@v7.0.0
       - name: Validate workflow syntax
         uses: rhysd/actionlint@v1.7.12
       - name: Enforce action reference pinning policy

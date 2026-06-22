@@ -16,7 +16,7 @@ jobs:
     outputs:
       tag: ${{ steps.normalise.outputs.tag }}
     steps:
-      - uses: actions/checkout@v6.0.3
+      - uses: actions/checkout@v7.0.0
         with:
           fetch-depth: 0
 
@@ -48,7 +48,7 @@ jobs:
       contents: read
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v6.0.3
+      - uses: actions/checkout@v7.0.0
         with:
           ref: ${{ needs.tag.outputs.tag }}
 
