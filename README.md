@@ -118,9 +118,10 @@ A GitHub App is the most secure and governance-friendly authentication method. A
    | --- | --- | --- |
    | Pull requests | Read & write | Fetch, approve, comment, merge, close PRs |
    | Contents | Read-only | Read file diffs |
-   | Checks | Read-only | Show CI check status |
    | Metadata | Read-only | Required by GitHub for all apps |
    | Commit statuses | Read-only | Show commit-level CI status |
+
+  > If your GitHub App UI shows a **Checks** permission, set it to **Read-only** to improve CI details. Some orgs/UI variants do not expose this permission; in that case, continue with the permissions above.
 
 4. Under **Where can this GitHub App be installed?**, select **Only on this account**. This prevents anyone else installing the app.
 
@@ -153,6 +154,8 @@ https://github.com/settings/installations/12345678
 
 That number (`12345678`) is your `installation_id`.
 
+Alternative way to find it: open the app's **Install App** page and click the configured installation; the same numeric ID appears in the URL.
+
 #### Step 5 — Configure `config.yaml`
 
 Edit your `config.yaml` to use GitHub App authentication. This file is mounted read-only into the container — it is the right place for these static credentials.
@@ -177,6 +180,8 @@ monitor:
   poll_interval_seconds: 60
   realtime_mode: polling
 ```
+
+> `client_secret` is **not required** for this app's GitHub App flow. Authentication uses `app_id` + `installation_id` + private key (`.pem`).
 
 > Only repos that are both listed in `repositories` **and** covered by the app installation are accessible. The app cannot see anything else even if you add it to the list.
 
