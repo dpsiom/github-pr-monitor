@@ -94,7 +94,68 @@ docker run --rm \
 
 ## Authentication
 
-### GitHub App
+### GitHub App (recommended for corporate use) {#github-app}
+
+A GitHub App is the most secure and governance-friendly authentication method. Access is restricted to specific repositories of your choosing, tokens are short-lived, and permissions are set per-action rather than granted at a broad user or organisation level.
+
+#### Step 1 — Create the GitHub App
+
+1. In GitHub, go to **Settings → Developer settings → GitHub Apps → New GitHub App**.
+   - If you want the app scoped to your organisation (rather than your personal account), go to **Your org → Settings → Developer settings → GitHub Apps** instead.
+
+2. Fill in the registration form:
+
+   | Field | What to enter |
+   | --- | --- |
+   | **GitHub App name** | Any unique name, e.g. `pr-monitor-yourname` |
+   | **Homepage URL** | `http://localhost:5000` (or any placeholder) |
+   | **Webhook** | Uncheck **Active** — webhooks are not needed for polling mode |
+   | **Callback URL** | Leave blank |
+
+3. Under **Repository permissions**, set **only** the permissions below and leave everything else as **No access**:
+
+   | Permission | Level | Why |
+   | --- | --- | --- |
+   | Pull requests | Read & write | Fetch, approve, comment, merge, close PRs |
+   | Contents | Read-only | Read file diffs |
+   | Checks | Read-only | Show CI check status |
+   | Metadata | Read-only | Required by GitHub for all apps |
+   | Commit statuses | Read-only | Show commit-level CI status |
+
+4. Under **Where can this GitHub App be installed?**, select **Only on this account**. This prevents anyone else installing the app.
+
+5. Click **Create GitHub App**.
+
+#### Step 2 — Note your App ID
+
+After creation, stay on the app settings page. You will see:
+
+> App ID: `123456`
+
+Copy that number — it is your `app_id` in `config.yaml`.
+
+#### Step 3 — Generate a private key
+
+Still on the app settings page, scroll to the bottom and click **Generate a private key**. A `.pem` file downloads automatically to your machine. Keep it safe — it acts as the app's password.
+
+#### Step 4 — Install the app on specific repositories
+
+1. On the app settings page, click **Install App** in the left sidebar.
+2. Click **Install** next to your account or organisation.
+3. Select **Only select repositories** and choose the exact repositories you want this monitor to access.
+4. Click **Install**.
+
+After installation, GitHub takes you to the installation settings page. The URL will look like:
+
+```
+https://github.com/settings/installations/12345678
+```
+
+That number (`12345678`) is your `installation_id`.
+
+#### Step 5 — Configure `config.yaml`
+
+Edit your `config.yaml` to use GitHub App authentication. This file is mounted read-only into the container — it is the right place for these static credentials.
 
 ```yaml
 # config.yaml
@@ -102,20 +163,65 @@ auth_mode: github_app
 
 github_app:
   enabled: true
-  app_id: "12345"
-  installation_id: "67890"
-  private_key_path: "/run/secrets/app.pem"
+  app_id: "123456"               # from Step 2
+  installation_id: "12345678"    # from Step 4
+  private_key_path: "/run/secrets/app.pem"   # path inside the container
+
+repositories:
+  - name: your-org/repo-one
+    enabled: true
+  - name: your-org/repo-two
+    enabled: true
+
+monitor:
+  poll_interval_seconds: 60
+  realtime_mode: polling
 ```
 
-Mount the PEM key when running:
+> Only repos that are both listed in `repositories` **and** covered by the app installation are accessible. The app cannot see anything else even if you add it to the list.
+
+#### Step 6 — Mount the private key and run
+
+With Docker Compose (recommended):
+
+```yaml
+# docker/docker-compose.yaml
+services:
+  app:
+    image: ghcr.io/dpsiom/github-pr-monitor:latest
+    environment:
+      - DATA_DIR=/app/data
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - /absolute/path/to/your-app.pem:/run/secrets/app.pem:ro
+      - app_data:/app/data
+    ports:
+      - "5000:5000"
+
+volumes:
+  app_data:
+```
+
+Or with `docker run`:
 
 ```bash
 docker run --rm \
-  -v /absolute/path/to/app.pem:/run/secrets/app.pem:ro \
   -v "$PWD/config.yaml:/app/config.yaml:ro" \
+  -v "/absolute/path/to/your-app.pem:/run/secrets/app.pem:ro" \
   -p 5000:5000 \
   ghcr.io/dpsiom/github-pr-monitor:latest
 ```
+
+#### Restricting to a single user
+
+A GitHub App authenticates as the app itself (not as a GitHub user). To ensure only you can operate this instance:
+
+- Keep the `.pem` private key file on your machine only — do not commit it to any repository.
+- Select **Only on this account** during registration (Step 1) so no other GitHub user can install it.
+- Install on **Only select repositories** (Step 4) so the token cannot reach any other repo even if the config is modified.
+- If running on a shared machine, restrict filesystem access to the `config.yaml` and `.pem` file to your user: `chmod 600 config.yaml your-app.pem`.
+
+---
 
 ### Browser Sign-in (OAuth device flow) {#browser-sign-in-oauth-device-flow}
 
@@ -154,6 +260,9 @@ The web UI will be available at **http://localhost:<host_port>**.
 | Empty PR list | Check `config.yaml` repository names are `owner/repo` format and complete browser authentication from the Settings panel |
 | Auth settings lost after restart | Ensure the `app_data` Docker volume is mounted (`DATA_DIR=/app/data`); auth settings are written to that volume |
 | Browser auth fails immediately | Verify the OAuth client ID entered in Settings is valid |
+| GitHub App — `401 Unauthorized` | Check `app_id` and `installation_id` in `config.yaml` are correct numbers (not the app slug name) |
+| GitHub App — `private_key_path` error | Ensure the `.pem` file is mounted into the container at exactly the path set in `config.yaml` and is readable |
+| GitHub App — repos not shown | Confirm the app is installed on those specific repositories (GitHub → Settings → Installations) and they are listed in `config.yaml` |
 | Port 5000 in use | Use `-p 5004:5000` and open `http://localhost:5004` |
 | Rate limit errors | Increase `monitor.poll_interval_seconds` (minimum 30) |
 
