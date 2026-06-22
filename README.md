@@ -262,9 +262,10 @@ A fine-grained PAT is the lightest-weight option. It is tied to your personal Gi
    | --- | --- | --- |
    | Pull requests | Read and write | Fetch, approve, comment, merge, close PRs |
    | Contents | Read-only | Read file diffs |
-   | Checks | Read-only | Show CI check status |
    | Commit statuses | Read-only | Show commit-level CI status |
    | Metadata | Read-only | Always required for fine-grained PATs |
+
+  > Note: **Checks** is not a selectable permission for fine-grained PATs.
 
 5. Click **Generate token** and copy the value immediately — GitHub will not show it again.
 
