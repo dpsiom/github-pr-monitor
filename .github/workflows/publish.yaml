@@ -105,7 +105,7 @@ jobs:
           path: dist/
 
       - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v3.0.1
+        uses: softprops/action-gh-release@v3.0.3
         with:
           tag_name: ${{ needs.tag.outputs.tag }}
           generate_release_notes: true
