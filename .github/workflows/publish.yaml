@@ -84,7 +84,7 @@ jobs:
           (Get-FileHash "dist/$pkg" -Algorithm SHA256).Hash + "  $pkg" | Out-File -FilePath "dist/SHA256SUMS-$env:RUNNER_OS.txt" -Encoding ascii
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: build-${{ matrix.os }}
           path: |
