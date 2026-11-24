@@ -48,7 +48,7 @@ jobs:
           Compress-Archive -Path dist/github-pr-monitor.exe -DestinationPath "dist/$pkgName" -Force
           (Get-FileHash "dist/$pkgName" -Algorithm SHA256).Hash + "  $pkgName" | Out-File -FilePath "dist/SHA256SUMS-$env:RUNNER_OS.txt" -Encoding ascii
       - name: Upload artifact
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: app-${{ matrix.os }}
           path: |
